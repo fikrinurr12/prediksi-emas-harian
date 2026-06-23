@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gold Predictor - Sistem Prediksi Arah Pergerakan Harga Emas</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <span class="brand-icon">🥇</span>
+            <span class="brand-name">Gold Predictor</span>
+        </div>
+        <div class="navbar-menu">
+            <a href="#" class="nav-link active">Beranda</a>
+            <a href="#prediksi" class="nav-link">Prediksi</a>
+            <a href="#tentang" class="nav-link">Tentang</a>
+        </div>
+    </nav>
+
+    <main class="container">
+
+        <section class="hero-card">
+            <h1>🛡️ Sistem Prediksi Arah Pergerakan Harga Emas</h1>
+            <p class="subtitle">Menggunakan Random Forest &amp; Indikator Teknikal untuk Prediksi Harian</p>
+            <div class="hero-badges">
+                <span class="badge badge-success" id="model-status">Model Aktif</span>
+                <span class="badge badge-info">Akurasi {{ accuracy }}%</span>
+            </div>
+        </section>
+
+        <section class="price-card">
+            <p class="price-label">Harga Emas Hari Ini (USD/oz)</p>
+            <h2 class="price-value" id="current-price">memuat...</h2>
+            <p class="price-change" id="price-change">-</p>
+            <p class="price-update" id="last-update">-</p>
+        </section>
+
+        <section class="grid-two" id="prediksi">
+            <div class="card">
+                <h3>📈 Prediksi Harga Emas</h3>
+                <button id="btn-predict" class="btn-primary">🔄 Prediksi Arah Harga</button>
+
+                <div id="prediction-result" class="prediction-result hidden">
+                    <div class="prediction-direction" id="prediction-direction">-</div>
+                    <div class="prediction-confidence" id="prediction-confidence">-</div>
+                    <div class="prediction-bars">
+                        <div class="prob-row">
+                            <span>Naik</span>
+                            <div class="prob-bar-bg">
+                                <div class="prob-bar-fill prob-up" id="bar-naik"></div>
+                            </div>
+                            <span id="text-naik">-</span>
+                        </div>
+                        <div class="prob-row">
+                            <span>Turun</span>
+                            <div class="prob-bar-bg">
+                                <div class="prob-bar-fill prob-down" id="bar-turun"></div>
+                            </div>
+                            <span id="text-turun">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <p class="disclaimer">
+                    ⚠️ <strong>Disclaimer:</strong> Hasil prediksi ini adalah alat bantu analisis.
+                    Keputusan investasi sepenuhnya menjadi tanggung jawab Anda.
+                </p>
+            </div>
+
+            <div class="card">
+                <h3>📊 Feature Importance Analysis</h3>
+                <p class="card-subtitle">Kontribusi setiap indikator terhadap prediksi</p>
+                <div id="feature-importance-list">
+                    <p class="loading-text">Memuat data...</p>
+                </div>
+                <div class="insight-box" id="insight-box"></div>
+            </div>
+        </section>
+
+        <section class="card" id="tentang">
+            <h3>ℹ️ Tentang Sistem</h3>
+            <p>
+                Sistem ini menggunakan algoritma <strong>Random Forest Classifier</strong> yang dilatih
+                dengan lima indikator teknikal: <em>Simple Moving Average (SMA)</em>,
+                <em>Exponential Moving Average (EMA)</em>, <em>Relative Strength Index (RSI)</em>,
+                <em>Stochastic Oscillator (STI)</em>, dan <em>Price Rate of Change (PROC)</em>
+                untuk memprediksi arah pergerakan harga emas harian (naik/turun).
+            </p>
+        </section>
+
+    </main>
+
+    <footer class="footer">
+        <p>Skripsi &mdash; Program Studi Teknik Informatika, Universitas Muria Kudus, 2026</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

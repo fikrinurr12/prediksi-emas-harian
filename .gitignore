@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data mentah (opsional - boleh di-commit kalau ukuran kecil < beberapa MB)
+# Uncomment baris di bawah kalau data tidak ingin masuk repo:
+# data/*.csv
+
+# Model besar (boleh di-track kalau ukurannya wajar, biasanya rf_model.pkl < 50MB)
+# models/*.pkl
+
+# Environment / secrets
+.env
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

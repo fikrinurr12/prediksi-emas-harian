@@ -1,0 +1,33 @@
+{
+  "accuracy": 0.46987951807228917,
+  "precision": 0.5285714285714286,
+  "recall": 0.5285714285714286,
+  "f1_score": 0.5285714285714286,
+  "confusion_matrix": [
+    [
+      43,
+      66
+    ],
+    [
+      66,
+      74
+    ]
+  ],
+  "best_params": {
+    "max_depth": 10,
+    "max_features": "sqrt",
+    "min_samples_leaf": 1,
+    "min_samples_split": 5,
+    "n_estimators": 200
+  },
+  "cv_best_score": 0.5175757575757575,
+  "feature_columns": [
+    "SMA",
+    "EMA",
+    "RSI",
+    "STI",
+    "PROC"
+  ],
+  "train_size": 994,
+  "test_size": 249
+}
