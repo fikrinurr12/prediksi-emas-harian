@@ -11,12 +11,8 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
-# Data mentah (opsional - boleh di-commit kalau ukuran kecil < beberapa MB)
-# Uncomment baris di bawah kalau data tidak ingin masuk repo:
-# data/*.csv
-
-# Model besar (boleh di-track kalau ukurannya wajar, biasanya rf_model.pkl < 50MB)
-# models/*.pkl
+# Streamlit
+.streamlit/secrets.toml
 
 # Environment / secrets
 .env
