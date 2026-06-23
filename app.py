@@ -14,6 +14,8 @@ import numpy as np
 import joblib
 import json
 import os
+import time
+import random
 from datetime import datetime
 
 import yfinance as yf
@@ -66,18 +68,58 @@ def load_model_artifacts():
 
 
 # ----------------------------------------------------------------------
-# Ambil data emas terbaru (cache 15 menit supaya tidak spam request)
+# Ambil data emas terbaru, dengan retry otomatis kalau kena rate limit
+# Yahoo Finance. Cache 30 menit supaya tidak memicu request berulang
+# saat banyak orang mengakses aplikasi dalam waktu singkat.
 # ----------------------------------------------------------------------
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=1800, show_spinner=False)
 def get_latest_gold_data(lookback_days: int = 60) -> pd.DataFrame:
-    df = yf.download(TICKER, period=f"{lookback_days}d", interval="1d",
-                      auto_adjust=True, progress=False)
+    max_retries = 4
+    base_delay = 3  # detik
 
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
+    last_error = None
 
-    df = df.reset_index()
-    return df
+    for attempt in range(max_retries):
+        try:
+            df = yf.download(TICKER, period=f"{lookback_days}d", interval="1d",
+                              auto_adjust=True, progress=False)
+
+            if df.empty:
+                raise ValueError("Data kosong dari Yahoo Finance.")
+
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+
+            df = df.reset_index()
+            return df
+
+        except Exception as e:
+            last_error = e
+            error_text = str(e).lower()
+
+            # Hanya retry untuk error rate limit / koneksi, bukan error lain
+            is_retryable = (
+                "rate" in error_text
+                or "too many requests" in error_text
+                or "timeout" in error_text
+                or "connection" in error_text
+            )
+
+            if is_retryable and attempt < max_retries - 1:
+                # Exponential backoff dengan sedikit random jitter agar tidak
+                # semua request retry di waktu yang sama persis
+                delay = base_delay * (2 ** attempt) + random.uniform(0, 1.5)
+                time.sleep(delay)
+                continue
+            else:
+                break
+
+    # Semua retry gagal -> lempar error yang informatif
+    raise ConnectionError(
+        f"Gagal mengambil data dari Yahoo Finance setelah {max_retries} percobaan. "
+        f"Kemungkinan sedang terjadi rate limiting sementara. "
+        f"Detail error terakhir: {last_error}"
+    )
 
 
 def run_prediction(model, scaler):
@@ -198,7 +240,8 @@ if model is None:
 st.subheader("💰 Harga Emas Hari Ini (USD/oz)")
 
 try:
-    result = run_prediction(model, scaler)
+    with st.spinner("Mengambil data harga emas terbaru..."):
+        result = run_prediction(model, scaler)
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -211,6 +254,18 @@ try:
         st.metric(label="Update Terakhir", value=result["last_update"])
     with col3:
         st.metric(label="Status", value="Live dari Yahoo Finance")
+
+except ConnectionError as e:
+    st.error(
+        "⏳ **Yahoo Finance sedang membatasi permintaan data (rate limit).**\n\n"
+        "Ini bukan kesalahan pada sistem — Yahoo Finance membatasi jumlah "
+        "permintaan data dalam periode waktu tertentu. Silakan tunggu "
+        "beberapa menit lalu klik tombol di bawah untuk mencoba lagi."
+    )
+    if st.button("🔄 Coba Lagi"):
+        st.cache_data.clear()
+        st.rerun()
+    st.stop()
 
 except Exception as e:
     st.error(f"Gagal mengambil data harga emas: {e}")
