@@ -14,12 +14,10 @@ import numpy as np
 import joblib
 import json
 import os
-import time
-import random
 from datetime import datetime
 
-import yfinance as yf
 from indicators import add_all_indicators
+from data_sources import get_latest_gold_data, get_cache_age_minutes
 
 # ----------------------------------------------------------------------
 # Konfigurasi halaman
@@ -68,62 +66,26 @@ def load_model_artifacts():
 
 
 # ----------------------------------------------------------------------
-# Ambil data emas terbaru, dengan retry otomatis kalau kena rate limit
-# Yahoo Finance. Cache 30 menit supaya tidak memicu request berulang
-# saat banyak orang mengakses aplikasi dalam waktu singkat.
+# Ambil API key Twelve Data dari Streamlit secrets (kalau tersedia).
+# Twelve Data hanya dipakai sebagai FALLBACK ketika Yahoo Finance gagal
+# total (misalnya karena rate limit) -- bukan pengganti sumber data utama.
 # ----------------------------------------------------------------------
+def _get_twelvedata_api_key():
+    try:
+        return st.secrets.get("TWELVEDATA_API_KEY", None)
+    except Exception:
+        return None
+
+
 @st.cache_data(ttl=1800, show_spinner=False)
-def get_latest_gold_data(lookback_days: int = 60) -> pd.DataFrame:
-    max_retries = 4
-    base_delay = 3  # detik
-
-    last_error = None
-
-    for attempt in range(max_retries):
-        try:
-            df = yf.download(TICKER, period=f"{lookback_days}d", interval="1d",
-                              auto_adjust=True, progress=False)
-
-            if df.empty:
-                raise ValueError("Data kosong dari Yahoo Finance.")
-
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-
-            df = df.reset_index()
-            return df
-
-        except Exception as e:
-            last_error = e
-            error_text = str(e).lower()
-
-            # Hanya retry untuk error rate limit / koneksi, bukan error lain
-            is_retryable = (
-                "rate" in error_text
-                or "too many requests" in error_text
-                or "timeout" in error_text
-                or "connection" in error_text
-            )
-
-            if is_retryable and attempt < max_retries - 1:
-                # Exponential backoff dengan sedikit random jitter agar tidak
-                # semua request retry di waktu yang sama persis
-                delay = base_delay * (2 ** attempt) + random.uniform(0, 1.5)
-                time.sleep(delay)
-                continue
-            else:
-                break
-
-    # Semua retry gagal -> lempar error yang informatif
-    raise ConnectionError(
-        f"Gagal mengambil data dari Yahoo Finance setelah {max_retries} percobaan. "
-        f"Kemungkinan sedang terjadi rate limiting sementara. "
-        f"Detail error terakhir: {last_error}"
-    )
+def fetch_gold_data_cached(lookback_days: int = 60):
+    """Wrapper ber-cache di sekitar get_latest_gold_data dari data_sources.py."""
+    api_key = _get_twelvedata_api_key()
+    return get_latest_gold_data(lookback_days=lookback_days, twelvedata_api_key=api_key)
 
 
 def run_prediction(model, scaler):
-    raw_df = get_latest_gold_data()
+    raw_df, data_source = fetch_gold_data_cached()
     df = add_all_indicators(raw_df)
     df = df.dropna().reset_index(drop=True)
 
@@ -157,6 +119,7 @@ def run_prediction(model, scaler):
         "price_change": round(change, 2),
         "price_change_pct": round(change_pct, 2),
         "last_update": last_date.strftime("%d %B %Y"),
+        "data_source": data_source,
     }
 
 
@@ -239,6 +202,13 @@ if model is None:
 # ----------------------------------------------------------------------
 st.subheader("💰 Harga Emas Hari Ini (USD/oz)")
 
+SOURCE_LABELS = {
+    "cache": "Cache (≤30 menit)",
+    "yfinance": "Live dari Yahoo Finance",
+    "twelvedata": "Live dari Twelve Data (cadangan)",
+    "cache_basi": "Cache lama (semua sumber gagal)",
+}
+
 try:
     with st.spinner("Mengambil data harga emas terbaru..."):
         result = run_prediction(model, scaler)
@@ -253,15 +223,34 @@ try:
     with col2:
         st.metric(label="Update Terakhir", value=result["last_update"])
     with col3:
-        st.metric(label="Status", value="Live dari Yahoo Finance")
+        source_label = SOURCE_LABELS.get(result["data_source"], result["data_source"])
+        st.metric(label="Sumber Data", value=source_label)
+
+    if result["data_source"] == "twelvedata":
+        st.info(
+            "ℹ️ Data diambil dari Twelve Data sebagai cadangan karena "
+            "Yahoo Finance sedang tidak dapat diakses (rate limit)."
+        )
+    elif result["data_source"] == "cache_basi":
+        st.warning(
+            "⚠️ Semua sumber data sedang tidak dapat diakses. "
+            "Menampilkan data cache terakhir yang tersimpan, kemungkinan "
+            "tidak mencerminkan harga paling baru."
+        )
+
+    cache_age = get_cache_age_minutes()
+    if cache_age is not None:
+        st.caption(f"🕒 Data terakhir disinkronkan {cache_age:.0f} menit yang lalu")
 
 except ConnectionError as e:
     st.error(
-        "⏳ **Yahoo Finance sedang membatasi permintaan data (rate limit).**\n\n"
-        "Ini bukan kesalahan pada sistem — Yahoo Finance membatasi jumlah "
-        "permintaan data dalam periode waktu tertentu. Silakan tunggu "
-        "beberapa menit lalu klik tombol di bawah untuk mencoba lagi."
+        "⏳ **Semua sumber data sedang tidak dapat diakses.**\n\n"
+        "Baik Yahoo Finance maupun cadangan (Twelve Data) sedang bermasalah, "
+        "dan tidak ada cache tersimpan. Silakan tunggu beberapa menit lalu "
+        "klik tombol di bawah untuk mencoba lagi."
     )
+    with st.expander("Detail teknis"):
+        st.code(str(e))
     if st.button("🔄 Coba Lagi"):
         st.cache_data.clear()
         st.rerun()

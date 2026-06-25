@@ -56,6 +56,40 @@ Browser akan otomatis terbuka ke `http://localhost:8501`
 
 ---
 
+## B.1 (Baru) Setup Fallback Twelve Data (Opsional, Disarankan)
+
+Yahoo Finance via `yfinance` adalah sumber data utama sesuai proposal, tetapi
+kadang mengalami rate limit terutama saat di-deploy di platform cloud yang
+menggunakan shared IP (seperti Streamlit Community Cloud). Untuk mengatasi
+ini, sistem dilengkapi fallback otomatis ke Twelve Data.
+
+**Cara setup:**
+
+1. Daftar gratis di [twelvedata.com](https://twelvedata.com) (tidak perlu
+   kartu kredit), dapatkan API key dari dashboard.
+2. **Untuk lokal:** copy `.streamlit/secrets.toml.example` menjadi
+   `.streamlit/secrets.toml`, isi `TWELVEDATA_API_KEY` dengan key asli.
+3. **Untuk Streamlit Community Cloud:** buka dashboard app → menu (...) →
+   Settings → Secrets → paste isi berikut (dengan key asli):
+   ```toml
+   TWELVEDATA_API_KEY = "key_asli_kamu"
+   ```
+
+**Cara kerja fallback (urutan otomatis):**
+1. Cek cache disk (kalau ada data yang masih segar, < 30 menit) → langsung pakai
+2. Coba Yahoo Finance (dengan retry otomatis 3x, exponential backoff)
+3. Kalau Yahoo Finance gagal total → coba Twelve Data (kalau API key diset)
+4. Kalau semua gagal → pakai cache lama (walau sudah agak basi) sebagai upaya terakhir
+5. Kalau benar-benar semua gagal dan tidak ada cache → tampilkan pesan error
+   yang jelas dengan tombol "Coba Lagi"
+
+Sistem akan menampilkan badge "Sumber Data" di dashboard supaya transparan
+data yang ditampilkan berasal dari mana (Cache / Yahoo Finance / Twelve Data).
+
+Tanpa API key Twelve Data, sistem tetap berfungsi normal (hanya fallback ke
+Twelve Data yang tidak aktif) — cocok untuk yang ingin tetap 100% murni
+mengandalkan Yahoo Finance sesuai proposal awal.
+
 ## C. Deploy ke GitHub
 
 ```bash
