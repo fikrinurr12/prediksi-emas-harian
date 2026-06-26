@@ -1,152 +1,218 @@
-# Gold Predictor (Streamlit)
+# Gold Predictor
 
 Sistem Prediksi Arah Pergerakan Harga Emas Harian menggunakan Random Forest
 dan Indikator Teknikal (SMA, EMA, RSI, Stochastic Oscillator, PROC), berbasis
-web dengan Streamlit.
+web dengan Flask.
 
-> Versi Streamlit dari sistem ini. Untuk versi Flask, lihat folder/repo
-> `gold-predictor` (tanpa suffix `-streamlit`).
+> Proyek ini adalah implementasi dari skripsi:
+> **"Prediksi Arah Pergerakan Harga Emas Harian Menggunakan Algoritma Random
+> Forest dan Indikator Teknikal Berbasis Web"**
 
 ---
 
 ## Struktur Folder
 
 ```
-gold-predictor-streamlit/
-├── app.py                      # Aplikasi Streamlit utama
+gold-predictor/
+├── app.py                      # Aplikasi Flask utama
 ├── indicators.py               # Implementasi rumus indikator teknikal
 ├── 01_fetch_data.py            # Tahap 3.4: Pengumpulan data dari yfinance
 ├── 02_preprocessing.py         # Tahap 3.6: Pembersihan, feature eng., pelabelan
 ├── 03_train_model.py           # Tahap 3.7-3.10: Training, evaluasi, simpan model
 ├── requirements.txt            # Daftar dependency Python
-├── data/                       # Data mentah & hasil preprocessing (dibuat otomatis)
-└── models/                     # Model, scaler, feature importance (dibuat otomatis)
+├── Procfile                    # Untuk Render / Railway
+├── runtime.txt                 # Versi Python untuk hosting
+├── data/
+│   ├── gold_raw.csv            # Data mentah hasil fetch (dibuat otomatis)
+│   └── gold_processed.csv      # Data siap latih (dibuat otomatis)
+├── models/
+│   ├── rf_model.pkl            # Model Random Forest terlatih
+│   ├── scaler.pkl              # MinMaxScaler terlatih
+│   ├── feature_importance.csv  # Hasil feature importance (MDI)
+│   └── metrics.json            # Metrik evaluasi (akurasi, presisi, dll)
+├── templates/
+│   └── index.html              # Halaman utama (sesuai mockup Gambar 3.3)
+└── static/
+    ├── css/style.css
+    └── js/main.js
 ```
 
 ---
 
-## A. Setup & Training Lokal
+## A. Setup Lokal (Langkah demi Langkah)
 
-Langkah 1-5 **identik** dengan versi Flask (lihat README versi Flask untuk
-detail lengkap tiap tahap):
+### 1. Buat virtual environment (opsional tapi disarankan)
+
+```bash
+python -m venv venv
+source venv/bin/activate        # Linux/Mac
+venv\Scripts\activate           # Windows
+```
+
+### 2. Install dependency
 
 ```bash
 pip install -r requirements.txt
+```
+
+### 3. Ambil data emas 5 tahun terakhir
+
+```bash
 python 01_fetch_data.py
+```
+
+Ini akan membuat `data/gold_raw.csv`. Pastikan komputer punya akses internet
+normal (tidak diblokir firewall kampus/kantor ke domain `*.finance.yahoo.com`).
+
+Jika `GC=F` (Gold Futures) bermasalah, coba ganti `TICKER` di
+`01_fetch_data.py` menjadi `"GLD"` (ETF emas, data lebih stabil tersedia).
+
+### 4. Jalankan preprocessing
+
+```bash
 python 02_preprocessing.py
+```
+
+Ini akan:
+- Membersihkan data (duplikat, nilai kosong)
+- Menghitung 5 indikator teknikal (SMA, EMA, RSI, STI, PROC)
+- Memberi label biner (1 = naik, 0 = turun) untuk hari berikutnya
+- Menyimpan hasil ke `data/gold_processed.csv`
+
+### 5. Latih model
+
+```bash
 python 03_train_model.py
 ```
 
-Setelah selesai, folder `models/` akan terisi `rf_model.pkl`, `scaler.pkl`,
-`feature_importance.csv`, `metrics.json`.
+Ini akan:
+- Membagi data 80:20 secara temporal (urut waktu, tidak diacak)
+- Melakukan normalisasi MinMaxScaler (fit hanya pada data latih)
+- Melakukan GridSearchCV dengan TimeSeriesSplit (5-fold) untuk hyperparameter
+  tuning sesuai Tabel 3.3
+- Mengevaluasi model pada data uji (akurasi, presisi, recall, F1, confusion
+  matrix)
+- Menghitung feature importance (MDI)
+- Menyimpan model ke `models/rf_model.pkl`, scaler ke `models/scaler.pkl`
 
-**Alternatif:** Jika sudah training di Google Colab (`Gold_Predictor.ipynb`),
-cukup download 4 file tersebut dan letakkan di folder `models/` di sini —
-tidak perlu training ulang.
+**Catatan penting:** Script ini menggunakan `TimeSeriesSplit`, bukan `KFold`
+biasa. Ini sengaja, karena data harga finansial bersifat berurutan waktu —
+KFold acak bisa menyebabkan model "melihat" data masa depan saat training
+(data leakage), yang membuat akurasi terlihat bagus secara palsu. Jika ingin
+membahas ini di Bab III/IV skripsi, ini poin metodologis yang baik untuk
+disebutkan sebagai penyempurnaan dari rencana awal.
 
----
-
-## B. Jalankan Aplikasi Streamlit Lokal
+### 6. Jalankan aplikasi Flask
 
 ```bash
-streamlit run app.py
+python app.py
 ```
 
-Browser akan otomatis terbuka ke `http://localhost:8501`
+Buka browser ke `http://127.0.0.1:5000`
 
 ---
 
-## B.1 (Baru) Setup Fallback Twelve Data (Opsional, Disarankan)
+## B. Re-training Berkala
 
-Yahoo Finance via `yfinance` adalah sumber data utama sesuai proposal, tetapi
-kadang mengalami rate limit terutama saat di-deploy di platform cloud yang
-menggunakan shared IP (seperti Streamlit Community Cloud). Untuk mengatasi
-ini, sistem dilengkapi fallback otomatis ke Twelve Data.
+Karena harga emas terus berubah, sebaiknya model dilatih ulang secara
+berkala (misalnya setiap beberapa minggu) supaya tetap relevan. Cukup
+ulangi langkah 3-5 di atas.
 
-**Cara setup:**
-
-1. Daftar gratis di [twelvedata.com](https://twelvedata.com) (tidak perlu
-   kartu kredit), dapatkan API key dari dashboard.
-2. **Untuk lokal:** copy `.streamlit/secrets.toml.example` menjadi
-   `.streamlit/secrets.toml`, isi `TWELVEDATA_API_KEY` dengan key asli.
-3. **Untuk Streamlit Community Cloud:** buka dashboard app → menu (...) →
-   Settings → Secrets → paste isi berikut (dengan key asli):
-   ```toml
-   TWELVEDATA_API_KEY = "key_asli_kamu"
-   ```
-
-**Cara kerja fallback (urutan otomatis):**
-1. Cek cache disk (kalau ada data yang masih segar, < 30 menit) → langsung pakai
-2. Coba Yahoo Finance (dengan retry otomatis 3x, exponential backoff)
-3. Kalau Yahoo Finance gagal total → coba Twelve Data (kalau API key diset)
-4. Kalau semua gagal → pakai cache lama (walau sudah agak basi) sebagai upaya terakhir
-5. Kalau benar-benar semua gagal dan tidak ada cache → tampilkan pesan error
-   yang jelas dengan tombol "Coba Lagi"
-
-Sistem akan menampilkan badge "Sumber Data" di dashboard supaya transparan
-data yang ditampilkan berasal dari mana (Cache / Yahoo Finance / Twelve Data).
-
-Tanpa API key Twelve Data, sistem tetap berfungsi normal (hanya fallback ke
-Twelve Data yang tidak aktif) — cocok untuk yang ingin tetap 100% murni
-mengandalkan Yahoo Finance sesuai proposal awal.
+---
 
 ## C. Deploy ke GitHub
 
 ```bash
 git init
 git add .
-git commit -m "Initial commit: Gold Predictor (Streamlit version)"
+git commit -m "Initial commit: Gold Predictor system"
 git branch -M main
-git remote add origin https://github.com/USERNAME/gold-predictor-streamlit.git
+git remote add origin https://github.com/USERNAME/gold-predictor.git
 git push -u origin main
 ```
 
-**Penting:** Pastikan `models/rf_model.pkl` dan `models/scaler.pkl` ikut
-di-push (jangan dimasukkan ke `.gitignore`), karena aplikasi butuh file ini
-untuk berjalan tanpa training ulang di server.
+**Penting:** Pastikan file `models/rf_model.pkl` dan `models/scaler.pkl`
+ikut di-push (jangan masukkan ke `.gitignore`), karena hosting butuh file
+ini untuk menjalankan prediksi tanpa training ulang di server.
+
+Jika file model berukuran besar (>50MB) dan GitHub menolak push, pertimbangkan
+[Git LFS](https://git-lfs.github.com/) atau kurangi `n_estimators` di
+`03_train_model.py`.
 
 ---
 
-## D. Deploy ke Streamlit Community Cloud (Gratis, Tanpa Kartu Kredit)
+## D. Deploy ke Render
 
-1. Buka [share.streamlit.io](https://share.streamlit.io)
-2. Login dengan akun GitHub
-3. Klik **Create app** → **From existing repo**
-4. Pilih repository `gold-predictor-streamlit`
-5. Isi:
-   - **Branch:** `main`
-   - **Main file path:** `app.py`
-6. Klik **Deploy**
+1. Buka [render.com](https://render.com), buat akun (bisa login dengan GitHub).
+2. Klik **New +** → **Web Service**.
+3. Hubungkan repository GitHub `gold-predictor`.
+4. Isi konfigurasi:
+   - **Build Command:** `pip install -r requirements.txt`
+   - **Start Command:** `gunicorn app:app`
+   - **Instance Type:** Free
+5. Klik **Create Web Service**. Render akan otomatis build & deploy.
+6. Setelah selesai, kamu akan dapat URL publik seperti
+   `https://gold-predictor.onrender.com`
 
-Setelah beberapa menit, aplikasi akan online dengan URL seperti
-`https://USERNAME-gold-predictor-streamlit.streamlit.app`
-
-**Keunggulan dibanding Render/Railway/PythonAnywhere:**
-- Tidak perlu kartu kredit sama sekali
-- Tidak ada pembatasan akses outbound ke API eksternal (yfinance bisa
-  diakses dengan bebas)
-- Tidak ada sleep policy yang agresif (meski tetap ada "app sleeping" untuk
-  inactivity jangka sangat lama, tinggal klik untuk wake up)
+**Catatan:** Free tier Render akan "tidur" (sleep) setelah 15 menit tanpa
+aktivitas, dan butuh sekitar 30-60 detik untuk bangun kembali saat diakses.
+Ini normal untuk free tier, cukup untuk keperluan demo skripsi.
 
 ---
 
-## E. Troubleshooting
+## E. Deploy ke Railway (alternatif)
+
+1. Buka [railway.app](https://railway.app), login dengan GitHub.
+2. Klik **New Project** → **Deploy from GitHub repo**.
+3. Pilih repository `gold-predictor`.
+4. Railway otomatis mendeteksi `Procfile` dan `requirements.txt`.
+5. Setelah deploy selesai, klik **Settings** → **Generate Domain** untuk
+   mendapatkan URL publik.
+
+---
+
+## F. Deploy ke PythonAnywhere (alternatif)
+
+1. Buka [pythonanywhere.com](https://www.pythonanywhere.com), buat akun gratis.
+2. Buka tab **Consoles** → buka **Bash console**.
+3. Clone repository:
+   ```bash
+   git clone https://github.com/USERNAME/gold-predictor.git
+   cd gold-predictor
+   pip install --user -r requirements.txt
+   ```
+4. Buka tab **Web** → **Add a new web app** → pilih **Flask** → Python 3.11.
+5. Edit konfigurasi WSGI file (`/var/www/USERNAME_pythonanywhere_com_wsgi.py`)
+   agar mengarah ke `app.py`:
+   ```python
+   import sys
+   path = '/home/USERNAME/gold-predictor'
+   if path not in sys.path:
+       sys.path.append(path)
+
+   from app import app as application
+   ```
+6. Klik **Reload** pada tab Web. Aplikasi bisa diakses di
+   `https://USERNAME.pythonanywhere.com`
+
+---
+
+## G. Troubleshooting Umum
 
 | Masalah | Solusi |
 |---|---|
-| `yfinance` gagal fetch data | Coba ganti `TICKER` di `app.py` dan script lain ke `"GLD"` |
-| Model tidak ditemukan saat run `streamlit run app.py` | Pastikan sudah jalankan 01-03 atau pindahkan model dari Colab ke folder `models/` |
-| Deploy gagal di Streamlit Cloud | Cek log di dashboard Streamlit Cloud, biasanya karena versi package di `requirements.txt` tidak cocok |
-| Halaman lambat saat pertama dibuka | Normal — `st.cache_data` dan `st.cache_resource` butuh load sekali di awal, setelah itu lebih cepat |
+| `yfinance` gagal fetch data (403/empty) | Coba ganti ticker ke `"GLD"`, atau cek koneksi internet/firewall |
+| Model akurasi rendah (~50%) | Normal di awal; coba tambah data historis, atau tuning ulang `PARAM_GRID` |
+| Render/Railway gagal build | Cek `requirements.txt`, pastikan versi compatible; cek log build |
+| Prediksi error di server tapi jalan di lokal | Biasanya karena rate-limit yfinance dari IP server; tambahkan retry/delay |
+| File model terlalu besar untuk GitHub | Kurangi `n_estimators`, atau gunakan Git LFS |
 
 ---
 
-## F. Catatan untuk Skripsi
+## H. Catatan untuk Bab III Skripsi
 
-Pergantian dari Flask ke Streamlit dilakukan pada tahap implementasi karena
-kendala teknis pada platform hosting gratis untuk Flask (permintaan info
-kartu kredit yang tidak konsisten, serta pembatasan akses jaringan keluar
-yang menghambat pengambilan data real-time). Streamlit Community Cloud
-dipilih sebagai pengganti karena mendukung kebutuhan sistem secara penuh
-tanpa kendala tersebut. Lihat dokumen `Panduan_Revisi_Flask_ke_Streamlit.md`
-untuk detail penyesuaian Bab II dan Bab III proposal.
+Jika ada penyesuaian teknis dari rencana awal proposal (misalnya penggunaan
+`TimeSeriesSplit` alih-alih `KFold` standar untuk validasi silang), ini wajar
+terjadi pada tahap implementasi dan sebaiknya didokumentasikan di Bab III
+sebagai bagian dari proses penyempurnaan metodologi, dengan penjelasan
+alasan teknis (mencegah data leakage pada data time series).
