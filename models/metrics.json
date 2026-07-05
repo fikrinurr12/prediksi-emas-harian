@@ -1,33 +1,29 @@
 {
-  "accuracy": 0.46987951807228917,
-  "precision": 0.5285714285714286,
-  "recall": 0.5285714285714286,
-  "f1_score": 0.5285714285714286,
-  "confusion_matrix": [
-    [
-      43,
-      66
-    ],
-    [
-      66,
-      74
-    ]
-  ],
-  "best_params": {
-    "max_depth": 10,
-    "max_features": "sqrt",
-    "min_samples_leaf": 1,
-    "min_samples_split": 5,
-    "n_estimators": 200
-  },
-  "cv_best_score": 0.5175757575757575,
-  "feature_columns": [
+  "features_order": [
     "SMA",
     "EMA",
     "RSI",
     "STI",
     "PROC"
   ],
-  "train_size": 994,
-  "test_size": 249
+  "indicator_window_N": 14,
+  "ticker": "GC=F",
+  "train_period": {
+    "start": "2020-12-31",
+    "end": "2025-12-31"
+  },
+  "best_hyperparameters": {
+    "max_depth": null,
+    "max_features": "sqrt",
+    "min_samples_leaf": 2,
+    "min_samples_split": 2,
+    "n_estimators": 100
+  },
+  "cv_accuracy_train": 0.6639561443581544,
+  "test_metrics": {
+    "accuracy": 0.6144578313253012,
+    "precision": 0.7014925373134329,
+    "recall": 0.6266666666666667,
+    "f1_score": 0.6619718309859155
+  }
 }
