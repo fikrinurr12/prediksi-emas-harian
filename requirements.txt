@@ -1,8 +1,16 @@
+# PENTING: scikit-learn versi di sini HARUS SAMA PERSIS dengan versi yang tercetak
+# di Sel 1 notebook training (variabel sklearn.__version__), kalau tidak, file
+# model_rf_emas.pkl / scaler_emas.pkl bisa GAGAL dimuat atau memberi hasil yang salah.
+#
+# Versi di bawah ini sesuai dengan model CONTOH yang disertakan di folder model/
+# (dilatih ulang khusus untuk menguji Flask app ini). Setelah Anda melatih model
+# sendiri di Colab, CEK versi sklearn yang tercetak di sana dan GANTI baris ini
+# supaya sama persis -- ini langkah yang paling sering terlewat dan bikin deploy gagal.
+scikit-learn==1.8.0
+
 Flask==3.1.3
-gunicorn==23.0.0
-yfinance==0.2.54
-pandas==2.2.3
-numpy==2.0.2
-scikit-learn==1.6.1
-joblib==1.4.2
-requests==2.32.3
+gunicorn==26.0.0
+pandas==3.0.2
+numpy==2.4.4
+joblib==1.5.3
+yfinance==1.5.1

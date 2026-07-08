@@ -3,101 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gold Predictor - Sistem Prediksi Arah Pergerakan Harga Emas</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Prediksi Arah Harga Emas Harian</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+    <div class="container">
+        <header>
+            <h1>🥇 Prediksi Arah Pergerakan Harga Emas Harian</h1>
+            <p class="subtitle">Random Forest + Indikator Teknikal (SMA, EMA, RSI, STI, PROC)</p>
+        </header>
 
-    <nav class="navbar">
-        <div class="navbar-brand">
-            <span class="brand-icon">🥇</span>
-            <span class="brand-name">Gold Predictor</span>
+        {% if error %}
+        <div class="card error-card">
+            <h2>⚠️ Terjadi Kesalahan</h2>
+            <p>{{ error }}</p>
+            <p class="small">Coba muat ulang halaman beberapa saat lagi.</p>
         </div>
-        <div class="navbar-menu">
-            <a href="#" class="nav-link active">Beranda</a>
-            <a href="#prediksi" class="nav-link">Prediksi</a>
-            <a href="#tentang" class="nav-link">Tentang</a>
-            <a href="/eksperimen" class="nav-link">🕯️ Eksperimen</a>
+        {% else %}
+
+        <div class="card main-card">
+            <div class="date-info">Data per: {{ hasil.tanggal_data }}</div>
+            <div class="price">${{ hasil.harga_close_terakhir }}</div>
+            <div class="price-label">Harga Close Terakhir (USD)</div>
+
+            <div class="prediction {{ 'up' if hasil.prediksi_kode == 1 else 'down' }}">
+                <span class="arrow">{{ '▲' if hasil.prediksi_kode == 1 else '▼' }}</span>
+                <span class="pred-text">Prediksi Besok: {{ hasil.prediksi }}</span>
+            </div>
+
+            <div class="probability-bar">
+                <div class="prob-segment up-segment" style="width: {{ hasil.probabilitas_naik }}%">
+                    {{ hasil.probabilitas_naik }}% Naik
+                </div>
+                <div class="prob-segment down-segment" style="width: {{ hasil.probabilitas_turun }}%">
+                    {{ hasil.probabilitas_turun }}% Turun
+                </div>
+            </div>
         </div>
-    </nav>
 
-    <main class="container">
+        <div class="card">
+            <h2>Nilai Indikator Teknikal Terkini</h2>
+            <table class="indicator-table">
+                <tr><th>Indikator</th><th>Nilai</th></tr>
+                {% for nama, nilai in hasil.indikator.items() %}
+                <tr><td>{{ nama }}</td><td>{{ nilai }}</td></tr>
+                {% endfor %}
+            </table>
+        </div>
 
-        <section class="hero-card">
-            <h1>🛡️ Sistem Prediksi Arah Pergerakan Harga Emas</h1>
-            <p class="subtitle">Menggunakan Random Forest &amp; Indikator Teknikal untuk Prediksi Harian</p>
-            <div class="hero-badges">
-                <span class="badge badge-success" id="model-status">Model Aktif</span>
-                <span class="badge badge-info">Akurasi {{ accuracy }}%</span>
-            </div>
-        </section>
+        <div class="card model-info-card">
+            <h2>Info Model</h2>
+            <p>Akurasi (data uji): <strong>{{ hasil.model_info.akurasi_test }}%</strong></p>
+            <p>F1-Score (data uji): <strong>{{ hasil.model_info.f1_score_test }}%</strong></p>
+            <p>Baseline (tebak mayoritas): <strong>{{ hasil.model_info.baseline_akurasi }}%</strong></p>
+        </div>
 
-        <section class="price-card">
-            <p class="price-label">Harga Emas Hari Ini (USD/oz)</p>
-            <h2 class="price-value" id="current-price">memuat...</h2>
-            <p class="price-change" id="price-change">-</p>
-            <p class="price-update" id="last-update">-</p>
-        </section>
+        <div class="disclaimer">
+            <strong>Disclaimer:</strong> Prediksi ini adalah hasil penelitian skripsi (Random Forest +
+            indikator teknikal) dan <strong>bukan rekomendasi investasi</strong>. Berdasarkan pengujian
+            metodologis menyeluruh, akurasi model berada dalam kisaran yang sebanding dengan strategi
+            baseline sederhana. Keputusan investasi sepenuhnya tanggung jawab pengguna.
+        </div>
 
-        <section class="grid-two" id="prediksi">
-            <div class="card">
-                <h3>📈 Prediksi Harga Emas</h3>
-                <button id="btn-predict" class="btn-primary">🔄 Prediksi Arah Harga</button>
+        {% endif %}
 
-                <div id="prediction-result" class="prediction-result hidden">
-                    <div class="prediction-direction" id="prediction-direction">-</div>
-                    <div class="prediction-confidence" id="prediction-confidence">-</div>
-                    <div class="prediction-bars">
-                        <div class="prob-row">
-                            <span>Naik</span>
-                            <div class="prob-bar-bg">
-                                <div class="prob-bar-fill prob-up" id="bar-naik"></div>
-                            </div>
-                            <span id="text-naik">-</span>
-                        </div>
-                        <div class="prob-row">
-                            <span>Turun</span>
-                            <div class="prob-bar-bg">
-                                <div class="prob-bar-fill prob-down" id="bar-turun"></div>
-                            </div>
-                            <span id="text-turun">-</span>
-                        </div>
-                    </div>
-                </div>
-
-                <p class="disclaimer">
-                    ⚠️ <strong>Disclaimer:</strong> Hasil prediksi ini adalah alat bantu analisis.
-                    Keputusan investasi sepenuhnya menjadi tanggung jawab Anda.
-                </p>
-            </div>
-
-            <div class="card">
-                <h3>📊 Feature Importance Analysis</h3>
-                <p class="card-subtitle">Kontribusi setiap indikator terhadap prediksi</p>
-                <div id="feature-importance-list">
-                    <p class="loading-text">Memuat data...</p>
-                </div>
-                <div class="insight-box" id="insight-box"></div>
-            </div>
-        </section>
-
-        <section class="card" id="tentang">
-            <h3>ℹ️ Tentang Sistem</h3>
-            <p>
-                Sistem ini menggunakan algoritma <strong>Random Forest Classifier</strong> yang dilatih
-                dengan lima indikator teknikal: <em>Simple Moving Average (SMA)</em>,
-                <em>Exponential Moving Average (EMA)</em>, <em>Relative Strength Index (RSI)</em>,
-                <em>Stochastic Oscillator (STI)</em>, dan <em>Price Rate of Change (PROC)</em>
-                untuk memprediksi arah pergerakan harga emas harian (naik/turun).
-            </p>
-        </section>
-
-    </main>
-
-    <footer class="footer">
-        <p>Skripsi &mdash; Program Studi Teknik Informatika, Universitas Muria Kudus, 2026</p>
-    </footer>
-
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+        <footer>
+            <p>Skripsi Prediksi Harga Emas — Muhammad Fikri Nursyahbani (202251159)</p>
+            <p><a href="/api/predict">Lihat JSON API</a> | <a href="/health">Health Check</a></p>
+        </footer>
+    </div>
 </body>
 </html>

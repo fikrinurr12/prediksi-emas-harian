@@ -1,218 +1,99 @@
-# Gold Predictor
+# Flask App — Prediksi Arah Harga Emas Harian
 
-Sistem Prediksi Arah Pergerakan Harga Emas Harian menggunakan Random Forest
-dan Indikator Teknikal (SMA, EMA, RSI, Stochastic Oscillator, PROC), berbasis
-web dengan Flask.
-
-> Proyek ini adalah implementasi dari skripsi:
-> **"Prediksi Arah Pergerakan Harga Emas Harian Menggunakan Algoritma Random
-> Forest dan Indikator Teknikal Berbasis Web"**
-
----
+Aplikasi web untuk menyajikan prediksi arah pergerakan harga emas harian dari model Random Forest + 5 indikator teknikal (SMA, EMA, RSI, STI, PROC), sesuai skripsi "Prediksi Arah Pergerakan Harga Emas Harian Menggunakan Algoritma Random Forest dan Indikator Teknikal".
 
 ## Struktur Folder
 
 ```
-gold-predictor/
-├── app.py                      # Aplikasi Flask utama
-├── indicators.py               # Implementasi rumus indikator teknikal
-├── 01_fetch_data.py            # Tahap 3.4: Pengumpulan data dari yfinance
-├── 02_preprocessing.py         # Tahap 3.6: Pembersihan, feature eng., pelabelan
-├── 03_train_model.py           # Tahap 3.7-3.10: Training, evaluasi, simpan model
-├── requirements.txt            # Daftar dependency Python
-├── Procfile                    # Untuk Render / Railway
-├── runtime.txt                 # Versi Python untuk hosting
-├── data/
-│   ├── gold_raw.csv            # Data mentah hasil fetch (dibuat otomatis)
-│   └── gold_processed.csv      # Data siap latih (dibuat otomatis)
-├── models/
-│   ├── rf_model.pkl            # Model Random Forest terlatih
-│   ├── scaler.pkl              # MinMaxScaler terlatih
-│   ├── feature_importance.csv  # Hasil feature importance (MDI)
-│   └── metrics.json            # Metrik evaluasi (akurasi, presisi, dll)
+flask_project/
+├── app.py                   # Aplikasi Flask utama
+├── requirements.txt         # Daftar dependency Python
+├── Procfile                 # Perintah start untuk Railway
+├── railway.json             # Konfigurasi tambahan Railway
+├── model/
+│   ├── model_rf_emas.pkl    # Model Random Forest terlatih
+│   ├── scaler_emas.pkl      # MinMaxScaler terlatih
+│   └── model_metadata.json  # Info fitur, hyperparameter, metrik
 ├── templates/
-│   └── index.html              # Halaman utama (sesuai mockup Gambar 3.3)
+│   └── index.html           # Halaman web tampilan prediksi
 └── static/
-    ├── css/style.css
-    └── js/main.js
+    └── style.css             # Styling halaman
 ```
 
----
+## ⚠️ SEBELUM DEPLOY — Langkah Wajib
 
-## A. Setup Lokal (Langkah demi Langkah)
+**File `model/*.pkl` yang disertakan di sini adalah CONTOH** (dilatih untuk menguji aplikasi ini berfungsi dengan benar). **Ganti dengan model hasil training Anda sendiri** dari notebook `prediksi_emas_rf_FINAL.ipynb` di Colab:
 
-### 1. Buat virtual environment (opsional tapi disarankan)
+1. Jalankan notebook FINAL di Colab sampai selesai (Sel 10 — "Simpan Model").
+2. Download 3 file yang otomatis ter-download: `model_rf_emas.pkl`, `scaler_emas.pkl`, `model_metadata.json`.
+3. **Timpa** file dengan nama sama di folder `model/` proyek ini.
+4. **Cek versi scikit-learn** yang tercetak di Sel 1 notebook Colab (contoh: `scikit-learn version: 1.6.1`).
+5. **Buka `requirements.txt`**, ubah baris `scikit-learn==...` supaya **sama persis** dengan versi di poin 4.
+
+Kalau langkah 4-5 dilewatkan, aplikasi kemungkinan besar **gagal start di Railway** dengan error semacam `InconsistentVersionWarning` atau bahkan crash total saat memuat file `.pkl`.
+
+## Menjalankan di Komputer Lokal (opsional, untuk tes dulu)
 
 ```bash
-python -m venv venv
-source venv/bin/activate        # Linux/Mac
-venv\Scripts\activate           # Windows
-```
-
-### 2. Install dependency
-
-```bash
+cd flask_project
+python3 -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-### 3. Ambil data emas 5 tahun terakhir
-
-```bash
-python 01_fetch_data.py
-```
-
-Ini akan membuat `data/gold_raw.csv`. Pastikan komputer punya akses internet
-normal (tidak diblokir firewall kampus/kantor ke domain `*.finance.yahoo.com`).
-
-Jika `GC=F` (Gold Futures) bermasalah, coba ganti `TICKER` di
-`01_fetch_data.py` menjadi `"GLD"` (ETF emas, data lebih stabil tersedia).
-
-### 4. Jalankan preprocessing
-
-```bash
-python 02_preprocessing.py
-```
-
-Ini akan:
-- Membersihkan data (duplikat, nilai kosong)
-- Menghitung 5 indikator teknikal (SMA, EMA, RSI, STI, PROC)
-- Memberi label biner (1 = naik, 0 = turun) untuk hari berikutnya
-- Menyimpan hasil ke `data/gold_processed.csv`
-
-### 5. Latih model
-
-```bash
-python 03_train_model.py
-```
-
-Ini akan:
-- Membagi data 80:20 secara temporal (urut waktu, tidak diacak)
-- Melakukan normalisasi MinMaxScaler (fit hanya pada data latih)
-- Melakukan GridSearchCV dengan TimeSeriesSplit (5-fold) untuk hyperparameter
-  tuning sesuai Tabel 3.3
-- Mengevaluasi model pada data uji (akurasi, presisi, recall, F1, confusion
-  matrix)
-- Menghitung feature importance (MDI)
-- Menyimpan model ke `models/rf_model.pkl`, scaler ke `models/scaler.pkl`
-
-**Catatan penting:** Script ini menggunakan `TimeSeriesSplit`, bukan `KFold`
-biasa. Ini sengaja, karena data harga finansial bersifat berurutan waktu —
-KFold acak bisa menyebabkan model "melihat" data masa depan saat training
-(data leakage), yang membuat akurasi terlihat bagus secara palsu. Jika ingin
-membahas ini di Bab III/IV skripsi, ini poin metodologis yang baik untuk
-disebutkan sebagai penyempurnaan dari rencana awal.
-
-### 6. Jalankan aplikasi Flask
-
-```bash
 python app.py
 ```
 
-Buka browser ke `http://127.0.0.1:5000`
+Buka `http://localhost:5000` di browser.
 
----
+## Cara Deploy ke Railway
 
-## B. Re-training Berkala
+### Opsi A — Lewat GitHub (direkomendasikan)
 
-Karena harga emas terus berubah, sebaiknya model dilatih ulang secara
-berkala (misalnya setiap beberapa minggu) supaya tetap relevan. Cukup
-ulangi langkah 3-5 di atas.
+1. Push folder `flask_project/` ini ke repository GitHub baru.
+2. Buka [railway.app](https://railway.app), login, klik **New Project**.
+3. Pilih **Deploy from GitHub repo**, pilih repository Anda.
+4. Railway otomatis mendeteksi `Procfile`/`railway.json` dan mulai build.
+5. Setelah build selesai, buka tab **Settings > Networking**, klik **Generate Domain** untuk mendapat URL publik.
+6. Tunggu 1-2 menit, buka URL yang diberikan.
 
----
-
-## C. Deploy ke GitHub
+### Opsi B — Lewat Railway CLI
 
 ```bash
-git init
-git add .
-git commit -m "Initial commit: Gold Predictor system"
-git branch -M main
-git remote add origin https://github.com/USERNAME/gold-predictor.git
-git push -u origin main
+npm install -g @railway/cli
+railway login
+cd flask_project
+railway init
+railway up
+railway domain   # untuk generate URL publik
 ```
 
-**Penting:** Pastikan file `models/rf_model.pkl` dan `models/scaler.pkl`
-ikut di-push (jangan masukkan ke `.gitignore`), karena hosting butuh file
-ini untuk menjalankan prediksi tanpa training ulang di server.
+## Endpoint yang Tersedia
 
-Jika file model berukuran besar (>50MB) dan GitHub menolak push, pertimbangkan
-[Git LFS](https://git-lfs.github.com/) atau kurangi `n_estimators` di
-`03_train_model.py`.
-
----
-
-## D. Deploy ke Render
-
-1. Buka [render.com](https://render.com), buat akun (bisa login dengan GitHub).
-2. Klik **New +** → **Web Service**.
-3. Hubungkan repository GitHub `gold-predictor`.
-4. Isi konfigurasi:
-   - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `gunicorn app:app`
-   - **Instance Type:** Free
-5. Klik **Create Web Service**. Render akan otomatis build & deploy.
-6. Setelah selesai, kamu akan dapat URL publik seperti
-   `https://gold-predictor.onrender.com`
-
-**Catatan:** Free tier Render akan "tidur" (sleep) setelah 15 menit tanpa
-aktivitas, dan butuh sekitar 30-60 detik untuk bangun kembali saat diakses.
-Ini normal untuk free tier, cukup untuk keperluan demo skripsi.
-
----
-
-## E. Deploy ke Railway (alternatif)
-
-1. Buka [railway.app](https://railway.app), login dengan GitHub.
-2. Klik **New Project** → **Deploy from GitHub repo**.
-3. Pilih repository `gold-predictor`.
-4. Railway otomatis mendeteksi `Procfile` dan `requirements.txt`.
-5. Setelah deploy selesai, klik **Settings** → **Generate Domain** untuk
-   mendapatkan URL publik.
-
----
-
-## F. Deploy ke PythonAnywhere (alternatif)
-
-1. Buka [pythonanywhere.com](https://www.pythonanywhere.com), buat akun gratis.
-2. Buka tab **Consoles** → buka **Bash console**.
-3. Clone repository:
-   ```bash
-   git clone https://github.com/USERNAME/gold-predictor.git
-   cd gold-predictor
-   pip install --user -r requirements.txt
-   ```
-4. Buka tab **Web** → **Add a new web app** → pilih **Flask** → Python 3.11.
-5. Edit konfigurasi WSGI file (`/var/www/USERNAME_pythonanywhere_com_wsgi.py`)
-   agar mengarah ke `app.py`:
-   ```python
-   import sys
-   path = '/home/USERNAME/gold-predictor'
-   if path not in sys.path:
-       sys.path.append(path)
-
-   from app import app as application
-   ```
-6. Klik **Reload** pada tab Web. Aplikasi bisa diakses di
-   `https://USERNAME.pythonanywhere.com`
-
----
-
-## G. Troubleshooting Umum
-
-| Masalah | Solusi |
+| Endpoint | Fungsi |
 |---|---|
-| `yfinance` gagal fetch data (403/empty) | Coba ganti ticker ke `"GLD"`, atau cek koneksi internet/firewall |
-| Model akurasi rendah (~50%) | Normal di awal; coba tambah data historis, atau tuning ulang `PARAM_GRID` |
-| Render/Railway gagal build | Cek `requirements.txt`, pastikan versi compatible; cek log build |
-| Prediksi error di server tapi jalan di lokal | Biasanya karena rate-limit yfinance dari IP server; tambahkan retry/delay |
-| File model terlalu besar untuk GitHub | Kurangi `n_estimators`, atau gunakan Git LFS |
+| `GET /` | Halaman web menampilkan prediksi hari ini |
+| `GET /api/predict` | Endpoint JSON — prediksi dalam format API |
+| `GET /health` | Health check (dipakai Railway untuk memastikan aplikasi hidup) |
 
----
+Contoh respons `/api/predict`:
+```json
+{
+  "status": "success",
+  "data": {
+    "tanggal_data": "2026-07-08",
+    "harga_close_terakhir": 4370.10,
+    "prediksi": "NAIK",
+    "probabilitas_naik": 55.98,
+    "probabilitas_turun": 44.02,
+    "indikator": { "SMA": 0.0018, "EMA": 0.0019, "RSI": 63.25, "STI": 50.04, "PROC": 0.0388 },
+    "model_info": { "akurasi_test": 60.24, "f1_score_test": 73.02, "baseline_akurasi": 60.24 }
+  }
+}
+```
 
-## H. Catatan untuk Bab III Skripsi
+## Catatan Penting Soal Konsistensi (Train/Serve Skew)
 
-Jika ada penyesuaian teknis dari rencana awal proposal (misalnya penggunaan
-`TimeSeriesSplit` alih-alih `KFold` standar untuk validasi silang), ini wajar
-terjadi pada tahap implementasi dan sebaiknya didokumentasikan di Bab III
-sebagai bagian dari proses penyempurnaan metodologi, dengan penjelasan
-alasan teknis (mencegah data leakage pada data time series).
+Fungsi `build_features()` di `app.py` **harus identik** dengan fungsi feature engineering yang dipakai di notebook training. Kalau Anda mengubah rumus indikator (misalnya ganti window N, atau ubah formula RSI) di notebook, **wajib** mengubah `app.py` dengan cara yang sama persis — kalau tidak, prediksi produksi tidak akan konsisten dengan hasil evaluasi skripsi.
+
+## Disclaimer
+
+Aplikasi ini adalah bagian dari penelitian skripsi. Berdasarkan pengujian metodologis yang menyeluruh (dijelaskan di Bab IV skripsi), performa model berada dalam kisaran yang sebanding dengan strategi baseline sederhana. **Ini bukan rekomendasi investasi** — nilai edukatif/akademis adalah tujuan utama aplikasi ini.

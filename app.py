@@ -1,274 +1,166 @@
 """
-app.py
-======
-Aplikasi Flask untuk Sistem Prediksi Arah Pergerakan Harga Emas Harian.
-Sesuai Bab III 3.11 Implementasi Website.
+Flask App - Prediksi Arah Pergerakan Harga Emas Harian
+Skripsi: Prediksi Arah Pergerakan Harga Emas Harian Menggunakan Algoritma
+         Random Forest dan Indikator Teknikal
+Penyusun: Muhammad Fikri Nursyahbani - 202251159
 
-Routing:
-    GET  /                -> halaman utama (dashboard prediksi)
-    GET  /api/predict      -> menjalankan prediksi terbaru & mengembalikan JSON
-    GET  /api/feature-importance -> mengembalikan data feature importance
-
-Cara jalankan lokal:
-    python app.py
-    lalu buka http://127.0.0.1:5000
+PENTING: Fungsi build_features() di bawah ini HARUS SAMA PERSIS dengan
+fungsi feature engineering yang dipakai saat training model (notebook FINAL).
+Kalau salah satu diubah, yang lain WAJIB ikut diubah -- kalau tidak,
+prediksi di produksi tidak akan konsisten dengan hasil training (train/serve skew).
 """
 
-from flask import Flask, render_template, jsonify, request
-import pandas as pd
-import numpy as np
-import joblib
-import json
 import os
-from datetime import datetime
-
-from indicators import add_all_indicators
-from data_sources import get_latest_gold_data, get_cache_age_minutes
-from candle_kejepit import detect_candle_kejepit
-from candle_rejection import detect_candle_rejection
-from terbang_terjun import detect_terbang_terjun
+import json
+import joblib
+import numpy as np
+import pandas as pd
+import yfinance as yf
+from datetime import date, timedelta
+from flask import Flask, render_template, jsonify
 
 app = Flask(__name__)
 
-MODEL_DIR = "models"
-FEATURE_COLS = ["SMA", "EMA", "RSI", "STI", "PROC"]
+# ============================================================
+# 1. Muat model, scaler, dan metadata SEKALI saat aplikasi start
+# ============================================================
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "model")
+
+model = joblib.load(os.path.join(MODEL_DIR, "model_rf_emas.pkl"))
+scaler = joblib.load(os.path.join(MODEL_DIR, "scaler_emas.pkl"))
+
+with open(os.path.join(MODEL_DIR, "model_metadata.json")) as f:
+    metadata = json.load(f)
+
+FEATURES = metadata["features_order"]
+N = metadata["indicator_window_N"]
 TICKER = "GC=F"
 
-# ----------------------------------------------------------------------
-# Load model, scaler, dan metrik sekali saja saat aplikasi start
-# (bukan setiap request, supaya cepat)
-# ----------------------------------------------------------------------
-_model = None
-_scaler = None
-_metrics = None
-_feature_importance = None
+print(f"[STARTUP] Model dimuat. Fitur: {FEATURES} | Window N={N}")
+print(f"[STARTUP] Akurasi test (dari training): {metadata['test_metrics']['accuracy']:.4f}")
 
 
-def load_artifacts():
-    global _model, _scaler, _metrics, _feature_importance
-
-    model_path = os.path.join(MODEL_DIR, "rf_model.pkl")
-    scaler_path = os.path.join(MODEL_DIR, "scaler.pkl")
-    metrics_path = os.path.join(MODEL_DIR, "metrics.json")
-    fi_path = os.path.join(MODEL_DIR, "feature_importance.csv")
-
-    if not os.path.exists(model_path):
-        raise FileNotFoundError(
-            "Model belum ditemukan. Jalankan 01_fetch_data.py, "
-            "02_preprocessing.py, lalu 03_train_model.py terlebih dahulu."
-        )
-
-    _model = joblib.load(model_path)
-    _scaler = joblib.load(scaler_path)
-
-    with open(metrics_path) as f:
-        _metrics = json.load(f)
-
-    _feature_importance = pd.read_csv(fi_path)
-
-
-def _get_twelvedata_api_key():
+# ============================================================
+# 2. Feature Engineering -- HARUS IDENTIK dengan notebook training
+# ============================================================
+def build_features(df, N=14):
     """
-    Ambil API key Twelve Data dari environment variable. Di Railway, ini
-    diset lewat dashboard Variables, BUKAN ditulis langsung di kode (supaya
-    tidak ter-commit ke GitHub).
+    Menghitung 5 indikator teknikal (Tabel 3.2 skripsi):
+    SMA, EMA, RSI, STI (Stochastic Oscillator), PROC.
+    Formula ini identik dengan yang dipakai di notebook FINAL training.
     """
-    return os.environ.get("TWELVEDATA_API_KEY", None)
+    df = df.copy()
+
+    # SMA & EMA: relatif terhadap harga (stasioner)
+    sma_raw = df["Close"].rolling(window=N).mean()
+    ema_raw = df["Close"].ewm(span=N, adjust=False).mean()
+    df["SMA"] = df["Close"] / sma_raw - 1
+    df["EMA"] = df["Close"] / ema_raw - 1
+
+    # RSI (rumus baku)
+    delta = df["Close"].diff()
+    gain = delta.clip(lower=0)
+    loss = -delta.clip(upper=0)
+    avg_gain = gain.rolling(window=N).mean()
+    avg_loss = loss.rolling(window=N).mean()
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    df["RSI"] = 100 - (100 / (1 + rs))
+
+    # STI (Stochastic Oscillator)
+    lowest_low = df["Low"].rolling(window=N).min()
+    highest_high = df["High"].rolling(window=N).max()
+    df["STI"] = (df["Close"] - lowest_low) / (highest_high - lowest_low) * 100
+
+    # PROC (Price Rate of Change)
+    df["PROC"] = (df["Close"] - df["Close"].shift(N)) / df["Close"].shift(N)
+
+    return df
 
 
-def predict_next_direction():
+def fetch_latest_data(lookback_days=60):
     """
-    Mengambil data emas terbaru, menghitung indikator teknikal, lalu
-    memprediksi arah pergerakan hari berikutnya menggunakan model RF
-    yang sudah dilatih.
+    Ambil data emas terbaru dari Yahoo Finance.
+    lookback_days perlu cukup panjang supaya rolling window (N=14) punya
+    data yang cukup untuk dihitung pada baris paling akhir.
     """
-    api_key = _get_twelvedata_api_key()
-    raw_df, data_source = get_latest_gold_data(lookback_days=60, twelvedata_api_key=api_key)
+    end_date = date.today().isoformat()
+    start_date = (date.today() - timedelta(days=lookback_days)).isoformat()
 
-    df = add_all_indicators(raw_df)
-    df = df.dropna().reset_index(drop=True)
+    raw = yf.download(TICKER, start=start_date, end=end_date, interval="1d", progress=False)
+    if isinstance(raw.columns, pd.MultiIndex):
+        raw.columns = raw.columns.get_level_values(0)
 
-    if df.empty:
-        raise ValueError("Tidak cukup data untuk menghitung indikator teknikal.")
+    df = raw.reset_index()
+    df["Date"] = pd.to_datetime(df["Date"])
+    df = df.sort_values("Date").reset_index(drop=True)
+    df = df.dropna(subset=["Open", "High", "Low", "Close"]).drop_duplicates(subset=["Date"]).reset_index(drop=True)
+    return df
 
-    latest_row = df.iloc[[-1]]
-    X_latest = latest_row[FEATURE_COLS]
-    X_latest_scaled = _scaler.transform(X_latest)
 
-    pred = _model.predict(X_latest_scaled)[0]
-    pred_proba = _model.predict_proba(X_latest_scaled)[0]
+def get_prediction():
+    """
+    Alur lengkap: ambil data terbaru -> hitung indikator -> normalisasi -> prediksi.
+    Mengembalikan dict berisi hasil prediksi & data pendukung untuk ditampilkan.
+    """
+    df = fetch_latest_data()
+    df = build_features(df, N)
 
-    current_price = float(latest_row["Close"].values[0])
-    last_date = pd.to_datetime(latest_row["Date"].values[0])
+    df_valid = df.dropna(subset=FEATURES).reset_index(drop=True)
+    if len(df_valid) == 0:
+        raise ValueError("Data tidak cukup untuk menghitung indikator. Coba lagi nanti.")
 
-    # Hitung perubahan harga harian terakhir untuk ditampilkan di dashboard
-    if len(df) >= 2:
-        prev_close = float(df.iloc[-2]["Close"])
-        change = current_price - prev_close
-        change_pct = (change / prev_close) * 100
-    else:
-        change, change_pct = 0.0, 0.0
+    latest_row = df_valid.iloc[[-1]]
+    X_latest = latest_row[FEATURES]
+    X_latest_scaled = scaler.transform(X_latest)
 
-    result = {
-        "prediction": "Naik" if pred == 1 else "Turun",
-        "prediction_code": int(pred),
-        "confidence": float(max(pred_proba)) * 100,
-        "probability_naik": float(pred_proba[1]) * 100,
-        "probability_turun": float(pred_proba[0]) * 100,
-        "current_price": round(current_price, 2),
-        "price_change": round(change, 2),
-        "price_change_pct": round(change_pct, 2),
-        "last_update": last_date.strftime("%d %B %Y"),
-        "data_source": data_source,
-        "indicators": {
-            "SMA": round(float(latest_row["SMA"].values[0]), 2),
-            "EMA": round(float(latest_row["EMA"].values[0]), 2),
-            "RSI": round(float(latest_row["RSI"].values[0]), 2),
-            "STI": round(float(latest_row["STI"].values[0]), 2),
-            "PROC": round(float(latest_row["PROC"].values[0]), 4),
-        }
+    pred = int(model.predict(X_latest_scaled)[0])
+    proba = model.predict_proba(X_latest_scaled)[0]
+
+    return {
+        "tanggal_data": latest_row["Date"].dt.strftime("%Y-%m-%d").values[0],
+        "harga_close_terakhir": round(float(latest_row["Close"].values[0]), 2),
+        "prediksi": "NAIK" if pred == 1 else "TURUN",
+        "prediksi_kode": pred,
+        "probabilitas_naik": round(float(proba[1]) * 100, 2),
+        "probabilitas_turun": round(float(proba[0]) * 100, 2),
+        "indikator": {feat: round(float(latest_row[feat].values[0]), 4) for feat in FEATURES},
+        "model_info": {
+            "akurasi_test": round(metadata["test_metrics"]["accuracy"] * 100, 2),
+            "f1_score_test": round(metadata["test_metrics"]["f1_score"] * 100, 2),
+            "baseline_akurasi": round(metadata["baseline_accuracy"] * 100, 2),
+        },
     }
-    return result
 
 
+# ============================================================
+# 3. Routes
+# ============================================================
 @app.route("/")
 def index():
-    return render_template(
-        "index.html",
-        accuracy=round(_metrics["accuracy"] * 100, 1)
-    )
-
-
-@app.route("/eksperimen")
-def eksperimen_pola_candle():
-    """
-    Halaman TERPISAH dari sistem prediksi utama. Murni eksplorasi pola
-    candlestick (Candle Kejepit, Candle Rejection, Terbang Terjun),
-    BUKAN bagian dari model Random Forest di halaman utama.
-    """
-    return render_template("eksperimen.html")
-
-
-@app.route("/api/eksperimen/pola-candle")
-def api_pola_candle():
-    """
-    Menghitung ketiga pola candlestick atas data emas terbaru, dan
-    mengembalikan ringkasan + sinyal 10 terbaru untuk masing-masing pola.
-    """
+    """Halaman utama - menampilkan prediksi hari ini dalam bentuk web sederhana."""
     try:
-        lookback_days = int(request.args.get("lookback_days", 180))
-        upper_wick = float(request.args.get("upper_wick", 61))
-        lower_wick = float(request.args.get("lower_wick", 61))
-        tt_length = int(request.args.get("tt_length", 20))
-        tt_upper = float(request.args.get("tt_upper", 1.5))
-        tt_lower = float(request.args.get("tt_lower", -1.5))
-
-        api_key = _get_twelvedata_api_key()
-        raw_df, data_source = get_latest_gold_data(
-            lookback_days=lookback_days, twelvedata_api_key=api_key
-        )
-
-        df_kejepit = detect_candle_kejepit(raw_df)
-        df_rejection = detect_candle_rejection(
-            raw_df, upper_wick_threshold=upper_wick, lower_wick_threshold=lower_wick
-        )
-        df_tt = detect_terbang_terjun(
-            raw_df, length=tt_length, upper_threshold=tt_upper, lower_threshold=tt_lower
-        )
-
-        def _last_signals(df, mask_col_list, cols):
-            mask = df[mask_col_list[0]].copy()
-            for col in mask_col_list[1:]:
-                mask = mask | df[col]
-            subset = df.loc[mask, cols].tail(10).copy()
-            # Konversi Timestamp & numpy types ke tipe JSON-friendly
-            if "Date" in subset.columns:
-                subset["Date"] = subset["Date"].astype(str)
-            return subset.to_dict(orient="records")
-
-        kejepit_signals = _last_signals(
-            df_kejepit,
-            ["is_bullish_kejepit", "is_bearish_kejepit"],
-            ["Date", "Close", "is_bullish_kejepit", "is_bearish_kejepit",
-             "zone_high", "zone_low", "box_color"],
-        )
-        rejection_signals = _last_signals(
-            df_rejection,
-            ["is_reject_sell", "is_reject_buy"],
-            ["Date", "Close", "upper_wick_pct", "lower_wick_pct",
-             "is_reject_sell", "is_reject_buy"],
-        )
-        tt_signals = _last_signals(
-            df_tt,
-            ["is_sell_signal", "is_buy_signal"],
-            ["Date", "Close", "linreg_osc_norm", "is_sell_signal", "is_buy_signal"],
-        )
-
-        # Data untuk grafik oscillator Terbang Terjun
-        tt_chart = df_tt[["Date", "linreg_osc_norm"]].dropna().copy()
-        tt_chart["Date"] = tt_chart["Date"].astype(str)
-
-        result = {
-            "data_source": data_source,
-            "n_candles": len(raw_df),
-            "candle_kejepit": {
-                "n_bullish": int(df_kejepit["is_bullish_kejepit"].sum()),
-                "n_bearish": int(df_kejepit["is_bearish_kejepit"].sum()),
-                "signals": kejepit_signals,
-            },
-            "candle_rejection": {
-                "n_reject_sell": int(df_rejection["is_reject_sell"].sum()),
-                "n_reject_buy": int(df_rejection["is_reject_buy"].sum()),
-                "signals": rejection_signals,
-            },
-            "terbang_terjun": {
-                "n_sell": int(df_tt["is_sell_signal"].sum()),
-                "n_buy": int(df_tt["is_buy_signal"].sum()),
-                "signals": tt_signals,
-                "chart": tt_chart.to_dict(orient="records"),
-            },
-        }
-        return jsonify({"success": True, "data": result})
-
+        hasil = get_prediction()
+        return render_template("index.html", hasil=hasil, error=None)
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return render_template("index.html", hasil=None, error=str(e))
 
 
 @app.route("/api/predict")
 def api_predict():
+    """Endpoint JSON - untuk dipakai programatik (mis. dipanggil dari aplikasi lain)."""
     try:
-        result = predict_next_direction()
-        return jsonify({"success": True, "data": result})
+        hasil = get_prediction()
+        return jsonify({"status": "success", "data": hasil})
     except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@app.route("/api/feature-importance")
-def api_feature_importance():
-    try:
-        fi = _feature_importance.copy()
-        total = fi["Importance"].sum()
-        fi["Percentage"] = (fi["Importance"] / total * 100).round(1)
-
-        data = fi[["Feature", "Percentage"]].to_dict(orient="records")
-        return jsonify({"success": True, "data": data})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-@app.route("/api/metrics")
-def api_metrics():
-    try:
-        return jsonify({"success": True, "data": _metrics})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-
-
-# Load model saat module diimpor (dibutuhkan baik untuk run lokal maupun
-# saat dijalankan oleh Gunicorn di server produksi)
-load_artifacts()
+@app.route("/health")
+def health():
+    """Health check endpoint - dipakai Railway untuk memastikan aplikasi hidup."""
+    return jsonify({"status": "ok", "model_loaded": model is not None})
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)
