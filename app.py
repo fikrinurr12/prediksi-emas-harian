@@ -116,9 +116,29 @@ def get_prediction():
     pred = int(model.predict(X_latest_scaled)[0])
     proba = model.predict_proba(X_latest_scaled)[0]
 
+    # kurs acuan HANYA untuk tampilan (konversi USD/oz -> perkiraan Rp/gram), bukan fitur model
+    KURS_USD_IDR = 18050
+    GRAM_PER_OZ = 31.1035
+    harga_usd_oz = float(latest_row["Close"].values[0])
+    harga_idr_gram_estimasi = harga_usd_oz * KURS_USD_IDR / GRAM_PER_OZ
+
+    idx_latest = df_valid.index[-1]
+    if idx_latest > 0:
+        prev_close = float(df_valid.loc[idx_latest - 1, "Close"])
+        perubahan_persen = (harga_usd_oz / prev_close - 1) * 100
+    else:
+        perubahan_persen = 0.0
+
+    trading_sim = metadata.get("trading_simulation")  # None kalau metadata lama (belum ada simulasi)
+
     return {
         "tanggal_data": latest_row["Date"].dt.strftime("%Y-%m-%d").values[0],
-        "harga_close_terakhir": round(float(latest_row["Close"].values[0]), 2),
+        "harga_close_terakhir": round(harga_usd_oz, 2),
+        "harga_open": round(float(latest_row["Open"].values[0]), 2),
+        "harga_high": round(float(latest_row["High"].values[0]), 2),
+        "harga_low": round(float(latest_row["Low"].values[0]), 2),
+        "harga_idr_gram_estimasi": round(harga_idr_gram_estimasi, 0),
+        "perubahan_persen": round(perubahan_persen, 2),
         "prediksi": "NAIK" if pred == 1 else "TURUN",
         "prediksi_kode": pred,
         "probabilitas_naik": round(float(proba[1]) * 100, 2),
@@ -128,7 +148,9 @@ def get_prediction():
             "akurasi_test": round(metadata["test_metrics"]["accuracy"] * 100, 2),
             "f1_score_test": round(metadata["test_metrics"]["f1_score"] * 100, 2),
             "baseline_akurasi": round(metadata["baseline_accuracy"] * 100, 2),
+            "roc_auc": round(metadata["test_metrics"].get("roc_auc", 0), 4),
         },
+        "trading_sim": trading_sim,
     }
 
 
