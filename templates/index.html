@@ -40,15 +40,15 @@
       <p class="price-idr">≈ Rp{{ "{:,.0f}".format(hasil.harga_idr_gram_estimasi).replace(",", ".") }} /gram
         <span style="color:#bbb;">(estimasi, kurs acuan Rp18.050/USD — bukan bagian dari model)</span></p>
 
-      <p class="desc">Random Forest + 5 indikator teknikal (SMA, EMA, RSI, Stochastic Oscillator, PROC) memprediksi
-        apakah harga emas dunia (XAU/USD) besok akan <strong>naik</strong> atau <strong>turun</strong> dibanding hari ini.</p>
+      <p class="desc">Random Forest + 5 indikator teknikal memprediksi apakah harga emas dunia (XAU/USD)
+        besok akan <strong>naik</strong> atau <strong>turun</strong> dibanding hari ini.</p>
 
-      <div class="card" style="background:var(--gray-light);border-radius:14px;padding:18px 20px;margin-bottom:26px;max-width:420px;">
+      <div class="prediksi-besok-card">
         <div style="font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:8px;">Prediksi Besok</div>
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-          <span style="font-size:1.6rem;">{{ '🟢▲' if hasil.prediksi_kode == 1 else '🔴▼' }}</span>
-          <strong style="font-size:1.3rem;font-family:'Poppins',sans-serif;">{{ hasil.prediksi }}</strong>
-          <span style="color:#888;font-size:.85rem;">({{ hasil.probabilitas_naik if hasil.prediksi_kode == 1 else hasil.probabilitas_turun }}% keyakinan model)</span>
+          <span style="font-size:1.4rem;">{{ '🟢▲' if hasil.prediksi_kode == 1 else '🔴▼' }}</span>
+          <strong style="font-size:1.2rem;font-family:'Poppins',sans-serif;">{{ hasil.prediksi }}</strong>
+          <span style="color:#888;font-size:.82rem;">({{ hasil.probabilitas_naik if hasil.prediksi_kode == 1 else hasil.probabilitas_turun }}% keyakinan model)</span>
         </div>
         <div style="height:8px;border-radius:999px;background:#e8e0c0;overflow:hidden;display:flex;">
           <div style="width:{{ hasil.probabilitas_naik }}%;background:#27ae60;"></div>
@@ -60,23 +60,30 @@
     </div>
 
     <div class="chart-card reveal">
-      <h3>Grafik Emas Realtime (XAU/USD)</h3>
+      <h3>Grafik Emas Realtime (XAU/USD) · 1 Bulan</h3>
       <div class="tv-widget-wrap">
         <div class="tradingview-widget-container">
           <div class="tradingview-widget-container__widget"></div>
-          <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js" async>
+          <div class="tradingview-widget-copyright">
+            <a href="https://www.tradingview.com/symbols/OANDA-XAUUSD/" rel="noopener nofollow" target="_blank">
+              <span class="blue-text">XAUUSD</span></a><span> by TradingView</span>
+          </div>
+          <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js" async>
           {
-            "autosize": true,
             "symbol": "OANDA:XAUUSD",
-            "interval": "D",
-            "timezone": "Etc/UTC",
-            "theme": "light",
-            "style": "3",
+            "width": "100%",
+            "height": "100%",
             "locale": "id",
-            "hide_top_toolbar": true,
-            "hide_legend": true,
-            "save_image": false,
-            "isTransparent": true
+            "dateRange": "1M",
+            "colorTheme": "light",
+            "trendLineColor": "rgba(212, 175, 55, 1)",
+            "underLineColor": "rgba(212, 175, 55, 0.3)",
+            "underLineBottomColor": "rgba(212, 175, 55, 0)",
+            "isTransparent": true,
+            "autosize": true,
+            "largeChartUrl": "",
+            "chartOnly": false,
+            "noTimeScale": false
           }
           </script>
         </div>
@@ -94,24 +101,46 @@
   <!-- ===================== MODEL SECTION ===================== -->
   <section class="section-model" id="model">
     <div class="inner reveal">
-      <div style="text-align:center;">
-        <div class="ai-icon">🤖</div>
+      <div class="fi-panel">
+        <div class="fi-title">Pengaruh Tiap Indikator Terhadap Prediksi</div>
+        {% for fi in hasil.feature_importance %}
+        <div class="fi-row">
+          <div class="fi-label">{{ fi.nama }}</div>
+          <div class="fi-bar-bg"><div class="fi-bar-fill" data-pct="{{ fi.persen }}"></div></div>
+          <div class="fi-pct">{{ fi.persen }}%</div>
+        </div>
+        {% endfor %}
+        <div class="fi-note">Dihitung dari Mean Decrease Impurity (MDI) model Random Forest yang aktif saat ini.
+          Persentase menunjukkan kontribusi <em>relatif</em> tiap indikator, bukan tingkat akurasi.</div>
       </div>
       <div>
         <h2>Model Machine Learning</h2>
         <p class="lead"><strong>Random Forest Classifier</strong> digunakan untuk memprediksi arah harga emas
-          berdasarkan 5 indikator teknikal berikut sebagai variabel input (sesuai Batasan Masalah penelitian):</p>
+          berdasarkan 5 indikator teknikal berikut sebagai variabel input (sesuai Batasan Masalah penelitian).
+          Klik nama indikator untuk penjelasan singkat:</p>
         <ul class="indicator-list">
-          <li><span class="check">✓</span> SMA (Simple Moving Average)</li>
-          <li><span class="check">✓</span> EMA (Exponential Moving Average)</li>
-          <li><span class="check">✓</span> RSI (Relative Strength Index)</li>
-          <li><span class="check">✓</span> Stochastic Oscillator</li>
-          <li><span class="check">✓</span> PROC (Price Rate of Change)</li>
+          {% for kode, label in [("SMA","SMA (Simple Moving Average)"), ("EMA","EMA (Exponential Moving Average)"),
+                                  ("RSI","RSI (Relative Strength Index)"), ("STI","Stochastic Oscillator"),
+                                  ("PROC","PROC (Price Rate of Change)")] %}
+          <li><span class="check">✓</span>
+            <button type="button" class="ind-name" data-ind="{{ kode }}">{{ label }}</button>
+          </li>
+          {% endfor %}
         </ul>
         <a href="#tentang" class="btn btn-outline">Lihat Performa Model</a>
       </div>
     </div>
   </section>
+
+  <!-- Popup penjelasan indikator -->
+  <div class="ind-modal-overlay" id="indModalOverlay">
+    <div class="ind-modal">
+      <button class="ind-close" id="indModalClose" aria-label="Tutup">&times;</button>
+      <h4 id="indModalTitle">Indikator</h4>
+      <p id="indModalBody">Penjelasan.</p>
+    </div>
+  </div>
+  <script id="indikator-data" type="application/json">{{ hasil.penjelasan_indikator | tojson }}</script>
 
   <!-- ===================== ABOUT SECTION ===================== -->
   <section class="section-about" id="tentang">
@@ -158,6 +187,52 @@
           <div class="v small">Python</div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- ===================== RIWAYAT PREDIKSI ===================== -->
+  <section class="section-riwayat" id="riwayat">
+    <div class="inner reveal">
+      <h2>Riwayat Prediksi</h2>
+      <p class="sub">Jejak rekam prediksi model dibanding hasil aktual — dicatat otomatis setiap hari, bukan dipilih-pilih.</p>
+
+      {% if hasil.akurasi_riwayat is not none %}
+      <div class="riwayat-summary">
+        Akurasi {{ hasil.jumlah_riwayat_resolved }} prediksi terakhir yang sudah terverifikasi:
+        <strong>{{ hasil.akurasi_riwayat }}%</strong>
+      </div>
+      {% endif %}
+
+      {% if hasil.riwayat and hasil.riwayat|length > 0 %}
+      <div class="riwayat-table-wrap">
+        <table class="riwayat-table">
+          <tr>
+            <th>Tanggal Prediksi</th><th>Harga Saat Itu</th><th>Prediksi</th>
+            <th>Target</th><th>Harga Aktual</th><th>Hasil</th>
+          </tr>
+          {% for r in hasil.riwayat %}
+          <tr>
+            <td>{{ r.tanggal_dibuat }}</td>
+            <td>${{ "%.2f"|format(r.harga_close_saat_prediksi) }}</td>
+            <td>{{ '🟢 NAIK' if r.prediksi_arah == 'NAIK' else '🔴 TURUN' }}</td>
+            <td>{{ r.tanggal_target or '—' }}</td>
+            <td>{{ '$%.2f'|format(r.harga_close_aktual_target) if r.harga_close_aktual_target else '—' }}</td>
+            <td>
+              {% if r.benar is none %}
+                <span class="badge-hasil pending">Menunggu</span>
+              {% elif r.benar == 1 %}
+                <span class="badge-hasil benar">Benar</span>
+              {% else %}
+                <span class="badge-hasil salah">Meleset</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </table>
+      </div>
+      {% else %}
+      <div class="riwayat-empty">Belum ada riwayat tercatat — riwayat akan mulai terisi sejak aplikasi ini pertama kali dijalankan.</div>
+      {% endif %}
     </div>
   </section>
 

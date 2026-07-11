@@ -19,7 +19,10 @@ import yfinance as yf
 from datetime import date, timedelta
 from flask import Flask, render_template, jsonify
 
+import db
+
 app = Flask(__name__)
+db.init_db()
 
 # ============================================================
 # 1. Muat model, scaler, dan metadata SEKALI saat aplikasi start
@@ -35,6 +38,22 @@ with open(os.path.join(MODEL_DIR, "model_metadata.json")) as f:
 FEATURES = metadata["features_order"]
 N = metadata["indicator_window_N"]
 TICKER = "GC=F"
+
+# Penjelasan ringkas tiap indikator -- dipakai untuk popup "klik nama indikator" di landing page.
+PENJELASAN_INDIKATOR = {
+    "SMA": "Simple Moving Average -- rata-rata harga selama 14 hari terakhir. Kalau harga sekarang "
+           "jauh di atas rata-rata ini, itu tanda tren sedang menguat.",
+    "EMA": "Exponential Moving Average -- mirip SMA, tapi memberi bobot lebih besar ke harga "
+           "terbaru, sehingga lebih cepat bereaksi terhadap perubahan tren dibanding SMA.",
+    "RSI": "Relative Strength Index -- mengukur seberapa kuat kenaikan dibanding penurunan harga "
+           "dalam 14 hari terakhir, skala 0-100. Di atas 70 biasa disebut 'jenuh beli' (overbought), "
+           "di bawah 30 disebut 'jenuh jual' (oversold).",
+    "STI": "Stochastic Oscillator -- membandingkan harga penutupan hari ini dengan rentang "
+           "harga tertinggi/terendah 14 hari terakhir, skala 0-100. Dipakai untuk mendeteksi "
+           "potensi pembalikan arah tren.",
+    "PROC": "Price Rate of Change -- persentase perubahan harga dibanding 14 hari sebelumnya. "
+            "Nilai positif besar berarti harga naik cepat; negatif besar berarti turun cepat.",
+}
 
 print(f"[STARTUP] Model dimuat. Fitur: {FEATURES} | Window N={N}")
 print(f"[STARTUP] Akurasi test (dari training): {metadata['test_metrics']['accuracy']:.4f}")
@@ -131,8 +150,29 @@ def get_prediction():
 
     trading_sim = metadata.get("trading_simulation")  # None kalau metadata lama (belum ada simulasi)
 
+    # Feature importance -- langsung dari model yang sudah di-pickle, TIDAK perlu retraining.
+    mdi_raw = model.feature_importances_  # array sejajar dengan FEATURES, jumlahnya = 1.0
+    feature_importance = sorted(
+        [{"nama": feat, "persen": round(float(val) * 100, 1)} for feat, val in zip(FEATURES, mdi_raw)],
+        key=lambda x: x["persen"], reverse=True,
+    )
+
+    # --- Catat prediksi hari ini ke SQLite, dan resolusi prediksi lama yang tanggal targetnya sudah lewat ---
+    tanggal_dibuat = latest_row["Date"].dt.strftime("%Y-%m-%d").values[0]
+    try:
+        db.catat_dan_resolusi_prediksi(
+            tanggal_dibuat=tanggal_dibuat,
+            harga_close_saat_prediksi=harga_usd_oz,
+            prediksi_arah="NAIK" if pred == 1 else "TURUN",
+            probabilitas=float(proba[pred]) * 100,
+            df_riwayat_harga=df_valid[["Date", "Close"]],
+        )
+    except Exception as e:
+        print(f"[WARN] Gagal mencatat riwayat prediksi ke SQLite: {e}")
+    riwayat, akurasi_riwayat, jumlah_riwayat_resolved = db.ambil_riwayat(limit=14)
+
     return {
-        "tanggal_data": latest_row["Date"].dt.strftime("%Y-%m-%d").values[0],
+        "tanggal_data": tanggal_dibuat,
         "harga_close_terakhir": round(harga_usd_oz, 2),
         "harga_open": round(float(latest_row["Open"].values[0]), 2),
         "harga_high": round(float(latest_row["High"].values[0]), 2),
@@ -144,6 +184,8 @@ def get_prediction():
         "probabilitas_naik": round(float(proba[1]) * 100, 2),
         "probabilitas_turun": round(float(proba[0]) * 100, 2),
         "indikator": {feat: round(float(latest_row[feat].values[0]), 4) for feat in FEATURES},
+        "feature_importance": feature_importance,
+        "penjelasan_indikator": PENJELASAN_INDIKATOR,
         "model_info": {
             "akurasi_test": round(metadata["test_metrics"]["accuracy"] * 100, 2),
             "f1_score_test": round(metadata["test_metrics"]["f1_score"] * 100, 2),
@@ -151,6 +193,9 @@ def get_prediction():
             "roc_auc": round(metadata["test_metrics"].get("roc_auc", 0), 4),
         },
         "trading_sim": trading_sim,
+        "riwayat": riwayat,
+        "akurasi_riwayat": akurasi_riwayat,
+        "jumlah_riwayat_resolved": jumlah_riwayat_resolved,
     }
 
 

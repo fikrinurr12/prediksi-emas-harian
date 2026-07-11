@@ -7,24 +7,38 @@
     "PROC"
   ],
   "indicator_window_N": 14,
+  "data_start": "2021-07-11",
+  "data_end": "2026-07-11",
   "sklearn_version": "1.6.1",
   "best_hyperparameters": {
     "max_depth": 5,
     "max_features": "sqrt",
-    "min_samples_leaf": 2,
-    "min_samples_split": 2,
-    "n_estimators": 100
+    "min_samples_leaf": 1,
+    "min_samples_split": 5,
+    "n_estimators": 300
   },
-  "cv_accuracy_train": 0.5404761904761906,
+  "cv_accuracy_train": 0.5321212121212122,
   "test_metrics": {
-    "accuracy": 0.541501976284585,
-    "precision": 0.5691489361702128,
-    "recall": 0.7535211267605634,
-    "f1_score": 0.6484848484848484,
-    "roc_auc": 0.4899124476589265
+    "accuracy": 0.5020080321285141,
+    "precision": 0.5439560439560439,
+    "recall": 0.7071428571428572,
+    "f1_score": 0.6149068322981367,
+    "roc_auc": 0.49747706422018345
   },
-  "baseline_accuracy": 0.5612648221343873,
-  "baseline_f1": 0.7189873417721518,
-  "generated_at": "2026-07-08T23:36:44.628142",
-  "notes": "FINAL - sesuai Batasan Masalah asli skripsi (5 indikator, horizon 1 hari, tanpa makro, data 5 tahun)."
+  "baseline_accuracy": 0.5622489959839357,
+  "baseline_f1": 0.7197943444730077,
+  "trading_simulation": {
+    "periode": "2026-01-01 s.d. 2026-07-10",
+    "modal_awal_idr": 100000000,
+    "kurs_acuan_usd_idr": 18050,
+    "modal_akhir_strategi_idr": 108383123.01656795,
+    "modal_akhir_buyhold_idr": 95125630.22789672,
+    "return_strategi_persen": 8.38312301656794,
+    "return_buyhold_persen": -4.874369772103282,
+    "permutation_test_p_value": 0.1495,
+    "permutation_test_n_shuffle": 2000,
+    "catatan": "Simulasi ilustratif, tidak memperhitungkan biaya transaksi/slippage/pajak. p_value = persentase urutan Long/Cash acak yang menyamai/mengalahkan model asli -- p_value tinggi berarti keunggulan atas Buy&Hold tidak terbukti signifikan."
+  },
+  "generated_at": "2026-07-11T20:41:50.516227",
+  "notes": "v2 - rentang tanggal tetap untuk reproduksibilitas + simulasi trading suplemen Bab IV."
 }
