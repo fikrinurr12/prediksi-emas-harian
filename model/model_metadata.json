@@ -39,6 +39,6 @@
     "permutation_test_n_shuffle": 2000,
     "catatan": "Simulasi ilustratif, tidak memperhitungkan biaya transaksi/slippage/pajak. p_value = persentase urutan Long/Cash acak yang menyamai/mengalahkan model asli -- p_value tinggi berarti keunggulan atas Buy&Hold tidak terbukti signifikan."
   },
-  "generated_at": "2026-07-11T20:41:50.516227",
+  "generated_at": "2026-07-11T22:42:26.207910",
   "notes": "v2 - rentang tanggal tetap untuk reproduksibilitas + simulasi trading suplemen Bab IV."
 }
