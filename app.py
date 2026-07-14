@@ -36,7 +36,8 @@ with open(os.path.join(MODEL_DIR, "model_metadata.json")) as f:
     metadata = json.load(f)
 
 FEATURES = metadata["features_order"]
-N = metadata["indicator_window_N"]
+N_LONG = metadata["indicator_window_N_long"]
+N_SHORT = metadata["indicator_window_N_short"]
 TICKER = "GC=F"
 
 # Penjelasan ringkas tiap indikator -- dipakai untuk popup "klik nama indikator" di landing page.
@@ -62,36 +63,38 @@ print(f"[STARTUP] Akurasi test (dari training): {metadata['test_metrics']['accur
 # ============================================================
 # 2. Feature Engineering -- HARUS IDENTIK dengan notebook training
 # ============================================================
-def build_features(df, N=14):
+def build_features(df, n_long=20, n_short=14):
     """
-    Menghitung 5 indikator teknikal (Tabel 3.2 skripsi):
-    SMA, EMA, RSI, STI (Stochastic Oscillator), PROC.
+    Menghitung 5 indikator teknikal (Tabel 3.2 skripsi, revisi window ganda):
+    SMA & EMA pakai jendela n_long (tren jangka panjang),
+    RSI, STI, PROC pakai jendela n_short (momentum jangka pendek).
     Formula ini identik dengan yang dipakai di notebook FINAL training.
     """
     df = df.copy()
 
-    # SMA & EMA: relatif terhadap harga (stasioner)
-    sma_raw = df["Close"].rolling(window=N).mean()
-    ema_raw = df["Close"].ewm(span=N, adjust=False).mean()
+    # SMA & EMA -- jendela panjang (tren)
+    sma_raw = df["Close"].rolling(window=n_long).mean()
+    ema_raw = df["Close"].ewm(span=n_long, adjust=False).mean()
     df["SMA"] = df["Close"] / sma_raw - 1
     df["EMA"] = df["Close"] / ema_raw - 1
 
-    # RSI (rumus baku)
+    # RSI -- jendela pendek (rumus baku)
     delta = df["Close"].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
-    avg_gain = gain.rolling(window=N).mean()
-    avg_loss = loss.rolling(window=N).mean()
+    avg_gain = gain.rolling(window=n_short).mean()
+    avg_loss = loss.rolling(window=n_short).mean()
     rs = avg_gain / avg_loss.replace(0, np.nan)
     df["RSI"] = 100 - (100 / (1 + rs))
+    df["RSI"] = df["RSI"].fillna(100)  # FIX: avg_loss=0 -> RSI=100, bukan NaN
 
-    # STI (Stochastic Oscillator)
-    lowest_low = df["Low"].rolling(window=N).min()
-    highest_high = df["High"].rolling(window=N).max()
+    # STI -- jendela pendek
+    lowest_low = df["Low"].rolling(window=n_short).min()
+    highest_high = df["High"].rolling(window=n_short).max()
     df["STI"] = (df["Close"] - lowest_low) / (highest_high - lowest_low) * 100
 
-    # PROC (Price Rate of Change)
-    df["PROC"] = (df["Close"] - df["Close"].shift(N)) / df["Close"].shift(N)
+    # PROC -- jendela pendek
+    df["PROC"] = (df["Close"] - df["Close"].shift(n_short)) / df["Close"].shift(n_short)
 
     return df
 
@@ -122,7 +125,7 @@ def get_prediction():
     Mengembalikan dict berisi hasil prediksi & data pendukung untuk ditampilkan.
     """
     df = fetch_latest_data()
-    df = build_features(df, N)
+    df = build_features(df, N_LONG, N_SHORT)
 
     df_valid = df.dropna(subset=FEATURES).reset_index(drop=True)
     if len(df_valid) == 0:
