@@ -11,34 +11,128 @@
   "data_end": "2026-07-11",
   "sklearn_version": "1.6.1",
   "best_hyperparameters": {
-    "max_depth": 5,
+    "max_depth": null,
     "max_features": "sqrt",
-    "min_samples_leaf": 1,
-    "min_samples_split": 5,
-    "n_estimators": 300
+    "min_samples_leaf": 10,
+    "min_samples_split": 2,
+    "n_estimators": 100
   },
-  "cv_accuracy_train": 0.5321212121212122,
+  "cv_accuracy_train": 0.5212121212121212,
   "test_metrics": {
-    "accuracy": 0.5020080321285141,
-    "precision": 0.5439560439560439,
-    "recall": 0.7071428571428572,
-    "f1_score": 0.6149068322981367,
-    "roc_auc": 0.49747706422018345
+    "accuracy": 0.5282258064516129,
+    "precision": 0.5774647887323944,
+    "recall": 0.5899280575539568,
+    "f1_score": 0.5836298932384342,
+    "roc_auc": 0.5127384331067255
   },
-  "baseline_accuracy": 0.5622489959839357,
-  "baseline_f1": 0.7197943444730077,
+  "baseline_accuracy": 0.5604838709677419,
+  "baseline_f1": 0.7183462532299741,
+  "model_vs_baseline": "kalah_keduanya",
+  "feature_correlation_pairs_over_0.7": [
+    {
+      "fitur_1": "SMA",
+      "fitur_2": "EMA",
+      "r": 0.9829
+    },
+    {
+      "fitur_1": "SMA",
+      "fitur_2": "RSI",
+      "r": 0.8734
+    },
+    {
+      "fitur_1": "SMA",
+      "fitur_2": "STI",
+      "r": 0.811
+    },
+    {
+      "fitur_1": "SMA",
+      "fitur_2": "PROC",
+      "r": 0.934
+    },
+    {
+      "fitur_1": "EMA",
+      "fitur_2": "RSI",
+      "r": 0.7902
+    },
+    {
+      "fitur_1": "EMA",
+      "fitur_2": "STI",
+      "r": 0.8024
+    },
+    {
+      "fitur_1": "EMA",
+      "fitur_2": "PROC",
+      "r": 0.8915
+    },
+    {
+      "fitur_1": "RSI",
+      "fitur_2": "STI",
+      "r": 0.7947
+    },
+    {
+      "fitur_1": "RSI",
+      "fitur_2": "PROC",
+      "r": 0.9225
+    },
+    {
+      "fitur_1": "STI",
+      "fitur_2": "PROC",
+      "r": 0.7215
+    }
+  ],
+  "permutation_importance": {
+    "SMA": {
+      "mean": 0.0293,
+      "std": 0.0225,
+      "t_stat": 7.126,
+      "signifikan_vs_noise_pengacakan": true
+    },
+    "EMA": {
+      "mean": 0.0036,
+      "std": 0.0234,
+      "t_stat": 0.851,
+      "signifikan_vs_noise_pengacakan": false
+    },
+    "RSI": {
+      "mean": 0.0228,
+      "std": 0.0165,
+      "t_stat": 7.598,
+      "signifikan_vs_noise_pengacakan": true
+    },
+    "STI": {
+      "mean": 0.0145,
+      "std": 0.019,
+      "t_stat": 4.194,
+      "signifikan_vs_noise_pengacakan": true
+    },
+    "PROC": {
+      "mean": 0.0282,
+      "std": 0.0137,
+      "t_stat": 11.322,
+      "signifikan_vs_noise_pengacakan": true
+    }
+  },
   "trading_simulation": {
     "periode": "2026-01-01 s.d. 2026-07-10",
     "modal_awal_idr": 100000000,
     "kurs_acuan_usd_idr": 18050,
-    "modal_akhir_strategi_idr": 108383123.01656795,
-    "modal_akhir_buyhold_idr": 95125630.22789672,
-    "return_strategi_persen": 8.38312301656794,
-    "return_buyhold_persen": -4.874369772103282,
-    "permutation_test_p_value": 0.1495,
+    "modal_akhir_strategi_idr": 109028508.74929804,
+    "modal_akhir_buyhold_idr": 88643387.20538366,
+    "return_strategi_persen": 9.028508749298037,
+    "return_buyhold_persen": -11.356612794616339,
+    "permutation_test_p_value": 0.188,
     "permutation_test_n_shuffle": 2000,
     "catatan": "Simulasi ilustratif, tidak memperhitungkan biaya transaksi/slippage/pajak. p_value = persentase urutan Long/Cash acak yang menyamai/mengalahkan model asli -- p_value tinggi berarti keunggulan atas Buy&Hold tidak terbukti signifikan."
   },
-  "generated_at": "2026-07-11T22:42:26.207910",
+  "long_short_eksploratif": {
+    "periode": "2026-05-01 s.d. 2026-07-10",
+    "precision_naik": 0.5774647887323944,
+    "precision_turun": 0.46226415094339623,
+    "return_long_short_persen": -12.550660610628073,
+    "return_buyhold_persen": -11.356612794616339,
+    "permutation_test_p_value": 0.7505,
+    "catatan": "Eksploratif, bukan hasil utama (lihat Sel 13 utk Long/Cash Jan-Jul 2026). Jendela lebih pendek = varians lebih tinggi. Kalau precision_turun < 0.5, sisi Short di sini secara matematis EV-negatif pada sisi itu."
+  },
+  "generated_at": "2026-07-14T01:11:38.891060",
   "notes": "v2 - rentang tanggal tetap untuk reproduksibilitas + simulasi trading suplemen Bab IV."
 }
