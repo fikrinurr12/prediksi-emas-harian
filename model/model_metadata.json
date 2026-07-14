@@ -6,7 +6,8 @@
     "STI",
     "PROC"
   ],
-  "indicator_window_N": 14,
+  "indicator_window_N_short": 14,
+  "indicator_window_N_long": 20,
   "data_start": "2021-07-11",
   "data_end": "2026-07-11",
   "sklearn_version": "1.6.1",
@@ -117,22 +118,22 @@
     "modal_awal_idr": 100000000,
     "kurs_acuan_usd_idr": 18050,
     "modal_akhir_strategi_idr": 109028508.74929804,
-    "modal_akhir_buyhold_idr": 88643387.20538366,
+    "modal_akhir_buyhold_idr": 95125630.22789672,
     "return_strategi_persen": 9.028508749298037,
-    "return_buyhold_persen": -11.356612794616339,
+    "return_buyhold_persen": -4.874369772103282,
     "permutation_test_p_value": 0.188,
     "permutation_test_n_shuffle": 2000,
     "catatan": "Simulasi ilustratif, tidak memperhitungkan biaya transaksi/slippage/pajak. p_value = persentase urutan Long/Cash acak yang menyamai/mengalahkan model asli -- p_value tinggi berarti keunggulan atas Buy&Hold tidak terbukti signifikan."
   },
   "long_short_eksploratif": {
-    "periode": "2026-05-01 s.d. 2026-07-10",
+    "periode": "2026-01-02 s.d. 2026-07-10",
     "precision_naik": 0.5774647887323944,
     "precision_turun": 0.46226415094339623,
-    "return_long_short_persen": -12.550660610628073,
-    "return_buyhold_persen": -11.356612794616339,
-    "permutation_test_p_value": 0.7505,
+    "return_long_short_persen": -9.836471509841505,
+    "return_buyhold_persen": -4.874369772103282,
+    "permutation_test_p_value": 0.6225,
     "catatan": "Eksploratif, bukan hasil utama (lihat Sel 13 utk Long/Cash Jan-Jul 2026). Jendela lebih pendek = varians lebih tinggi. Kalau precision_turun < 0.5, sisi Short di sini secara matematis EV-negatif pada sisi itu."
   },
-  "generated_at": "2026-07-14T01:11:38.891060",
+  "generated_at": "2026-07-14T21:12:01.728119",
   "notes": "v2 - rentang tanggal tetap untuk reproduksibilitas + simulasi trading suplemen Bab IV."
 }
