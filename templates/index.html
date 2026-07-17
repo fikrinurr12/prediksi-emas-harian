@@ -58,9 +58,15 @@
         <p class="price-idr">
           ≈ Rp{{ "{:,.0f}".format(hasil.harga_idr_gram_estimasi).replace(",",
           ".") }} /gram
+          {% if hasil.kurs_live %}
           <span style="color: #bbb"
-            >(estimasi, kurs acuan Rp18.050/USD — bukan bagian dari model)</span
+            >(estimasi, kurs live Rp{{ "{:,.0f}".format(hasil.kurs_usd_idr).replace(",", ".") }}/USD via Yahoo Finance — bukan bagian dari model)</span
           >
+          {% else %}
+          <span style="color: #bbb"
+            >(estimasi, kurs Rp{{ "{:,.0f}".format(hasil.kurs_usd_idr).replace(",", ".") }}/USD -- kurs live gagal diambil, pakai nilai cadangan — bukan bagian dari model)</span
+          >
+          {% endif %}
         </p>
 
         <p class="desc">

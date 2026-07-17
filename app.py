@@ -99,6 +99,31 @@ def build_features(df, n_long=20, n_short=14):
     return df
 
 
+def fetch_usd_idr_rate(fallback=18050):
+    """
+    Ambil kurs USD/IDR terkini dari Yahoo Finance (ticker USDIDR=X).
+    Kalau fetch gagal (jaringan, ticker down, dsb), pakai `fallback` supaya
+    kegagalan ambil kurs TIDAK pernah membuat seluruh halaman prediksi error --
+    ini cuma angka tampilan, bukan bagian dari model, jadi wajar didegradasi
+    dengan lembut (graceful fallback) alih-alih ikut melempar exception.
+    Return: (rate: float, is_live: bool)
+    """
+    try:
+        raw = yf.download("USDIDR=X", period="5d", interval="1d", progress=False)
+        if isinstance(raw.columns, pd.MultiIndex):
+            raw.columns = raw.columns.get_level_values(0)
+        raw = raw.dropna(subset=["Close"])
+        if len(raw) == 0:
+            return float(fallback), False
+        rate = float(raw["Close"].iloc[-1])
+        if not np.isfinite(rate) or rate <= 0:
+            return float(fallback), False
+        return rate, True
+    except Exception as e:
+        print(f"[WARN] Gagal ambil kurs USD/IDR live, pakai fallback {fallback}: {e}")
+        return float(fallback), False
+
+
 def fetch_latest_data(lookback_days=60):
     """
     Ambil data emas terbaru dari Yahoo Finance.
@@ -162,8 +187,11 @@ def get_prediction():
     pred = int(model.predict(X_latest_scaled)[0])
     proba = model.predict_proba(X_latest_scaled)[0]
 
-    # kurs acuan HANYA untuk tampilan (konversi USD/oz -> perkiraan Rp/gram), bukan fitur model
-    KURS_USD_IDR = 18050
+    # kurs acuan HANYA untuk tampilan (konversi USD/oz -> perkiraan Rp/gram), bukan fitur model.
+    # FIX: sebelumnya angka tetap (18050) yang ditulis manual di kode -- sekarang diambil live
+    # dari Yahoo Finance (USDIDR=X), dengan fallback ke angka tetap kalau fetch-nya gagal supaya
+    # kegagalan ambil kurs tidak pernah menjatuhkan seluruh halaman prediksi.
+    KURS_USD_IDR, kurs_live = fetch_usd_idr_rate(fallback=18050)
     GRAM_PER_OZ = 31.1035
     harga_usd_oz = float(latest_row["Close"].values[0])
     harga_idr_gram_estimasi = harga_usd_oz * KURS_USD_IDR / GRAM_PER_OZ
@@ -229,6 +257,8 @@ def get_prediction():
         "harga_high": round(float(latest_row["High"].values[0]), 2),
         "harga_low": round(float(latest_row["Low"].values[0]), 2),
         "harga_idr_gram_estimasi": round(harga_idr_gram_estimasi, 0),
+        "kurs_usd_idr": round(KURS_USD_IDR, 0),
+        "kurs_live": kurs_live,
         "perubahan_persen": round(perubahan_persen, 2),
         "prediksi": "NAIK" if pred == 1 else "TURUN",
         "prediksi_kode": pred,
