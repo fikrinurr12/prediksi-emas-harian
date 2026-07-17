@@ -134,6 +134,6 @@
     "permutation_test_p_value": 0.6225,
     "catatan": "Eksploratif, bukan hasil utama (lihat Sel 13 utk Long/Cash Jan-Jul 2026). Jendela lebih pendek = varians lebih tinggi. Kalau precision_turun < 0.5, sisi Short di sini secara matematis EV-negatif pada sisi itu."
   },
-  "generated_at": "2026-07-14T21:12:01.728119",
+  "generated_at": "2026-07-16T23:42:07.904193",
   "notes": "v2 - rentang tanggal tetap untuk reproduksibilitas + simulasi trading suplemen Bab IV."
 }
