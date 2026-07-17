@@ -114,7 +114,7 @@ if (chartDataEl && window.Chart) {
             pointHoverRadius: 4,
             tension: 0.25,
             fill: true,
-            spanGaps: false, // FIX: sumbu-x sekarang kalender hari kerja penuh --
+            spanGaps: true, // FIX: sumbu-x sekarang kalender hari kerja penuh --
             // hari libur bursa jadi null; spanGaps menyambung
             // garis melewatinya dgn mulus, bukan memutusnya.
           },

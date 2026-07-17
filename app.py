@@ -187,15 +187,16 @@ def get_prediction():
     # FIX: GC=F tidak trading di akhir pekan & libur bursa (mis. Juneteenth, Independence
     # Day), jadi ada tanggal yang memang tidak punya data -- BUKAN data hilang/rusak.
     # Sebelumnya sumbu-x cuma daftar tanggal yang ADA data, jadi jarak antar titik jadi
-    # tidak rata (kelihatan seperti "ada yang lompat"). Sekarang di-reindex ke kalender
-    # hari kerja penuh (Senin-Jumat): hari yang bursa tutup jadi None di data ("harga"),
-    # sumbu-x tetap berjarak rata per hari, dan spanGaps di Chart.js (lihat script.js)
-    # menyambung garis melewati None itu dengan mulus alih-alih memutusnya.
-    full_bdays = pd.bdate_range(start=chart_df["Date"].min(), end=chart_df["Date"].max())
-    chart_series = chart_df.set_index("Date")["Close"].reindex(full_bdays)
+    # tidak rata (kelihatan seperti "ada yang lompat"). Sekarang di-reindex ke KALENDER
+    # PENUH (7 hari/minggu, termasuk Sabtu-Minggu): hari yang bursa tutup jadi None di
+    # data ("harga"), sumbu-x tetap dapat slot & berjarak rata utk SETIAP hari, dan
+    # spanGaps di Chart.js (lihat script.js) menyambung garis melewati None itu dengan
+    # mulus alih-alih memutusnya.
+    full_days = pd.date_range(start=chart_df["Date"].min(), end=chart_df["Date"].max(), freq="D")
+    chart_series = chart_df.set_index("Date")["Close"].reindex(full_days)
 
     chart_data = {
-        "labels": full_bdays.strftime("%d %b").tolist(),
+        "labels": full_days.strftime("%d %b").tolist(),
         "harga": [None if pd.isna(v) else round(float(v), 2) for v in chart_series.tolist()],
         "ticker": TICKER,
     }
