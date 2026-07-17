@@ -73,6 +73,12 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeIndMo
 // Grafik harga emas -- dirender dari data yfinance yang dikirim Flask (bukan widget eksternal),
 // supaya instrumen & sumber datanya identik dengan yang dipakai model untuk prediksi.
 const chartDataEl = document.getElementById("chart-data");
+if (chartDataEl && !window.Chart) {
+  // FIX: sebelumnya kegagalan ini diam-diam -- kalau Chart.js gagal ke-load
+  // dgn alasan apapun (file hilang, dst), sekarang minimal ada jejak di
+  // console supaya gampang didiagnosis lewat DevTools, bukan cuma "kosong".
+  console.error("[PrediksiEmas] Chart.js tidak ter-load -- grafik tidak bisa dirender. Cek static/vendor/chart.umd.js.");
+}
 if (chartDataEl && window.Chart) {
   const chartData = JSON.parse(chartDataEl.textContent);
   const ctx = document.getElementById("goldChart");

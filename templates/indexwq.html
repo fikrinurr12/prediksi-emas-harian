@@ -8,15 +8,7 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='style.css') }}"
     />
-    <!-- FIX: Chart.js sebelumnya di-load dari CDN eksternal. Kalau CDN itu
-         diblokir jaringan pengguna (adblocker, firewall korporat, dsb),
-         window.Chart jadi undefined dan grafik silently gagal tampil tanpa
-         pesan error apapun -- itu penyebab grafik kosong sebelumnya (sudah
-         dikonfirmasi lewat /api/predict: data chart-nya lengkap, jadi
-         masalahnya di loading script ini, bukan di data).
-         Sekarang di-self-host di static/vendor/ supaya tidak bergantung ke
-         server eksternal sama sekali. -->
-    <script src="{{ url_for('static', filename='vendor/chart.umd.js') }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
   </head>
   <body>
     <header class="navbar">
