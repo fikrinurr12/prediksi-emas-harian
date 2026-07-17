@@ -69,3 +69,49 @@ function closeIndModal() {
 document.getElementById("indModalClose")?.addEventListener("click", closeIndModal);
 indOverlay?.addEventListener("click", (e) => { if (e.target === indOverlay) closeIndModal(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeIndModal(); });
+
+// Grafik harga emas -- dirender dari data yfinance yang dikirim Flask (bukan widget eksternal),
+// supaya instrumen & sumber datanya identik dengan yang dipakai model untuk prediksi.
+const chartDataEl = document.getElementById("chart-data");
+if (chartDataEl && window.Chart) {
+  const chartData = JSON.parse(chartDataEl.textContent);
+  const ctx = document.getElementById("goldChart");
+  if (ctx && chartData.harga && chartData.harga.length) {
+    new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: chartData.labels,
+        datasets: [{
+          label: `Harga Close (${chartData.ticker})`,
+          data: chartData.harga,
+          borderColor: "#B8860B",
+          backgroundColor: "rgba(212,175,55,0.15)",
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          tension: 0.25,
+          fill: true,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (item) => `$${item.parsed.y.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+            },
+          },
+        },
+        scales: {
+          x: { grid: { display: false } },
+          y: {
+            ticks: { callback: (val) => `$${val.toLocaleString("en-US")}` },
+            grid: { color: "rgba(0,0,0,0.06)" },
+          },
+        },
+      },
+    });
+  }
+}

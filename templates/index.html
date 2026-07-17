@@ -8,6 +8,7 @@
       rel="stylesheet"
       href="{{ url_for('static', filename='style.css') }}"
     />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
   </head>
   <body>
     <header class="navbar">
@@ -117,40 +118,17 @@
       </div>
 
       <div class="chart-card reveal">
-        <h3>Grafik Emas Realtime (XAU/USD) · 7 Hari</h3>
+        <h3>Grafik Harga Emas ({{ hasil.chart.ticker }}) · {{ hasil.chart.labels|length }} Hari Terakhir</h3>
         <div class="tv-widget-wrap">
-          <div class="tradingview-widget-container">
-            <div class="tradingview-widget-container__widget"></div>
-            <div class="tradingview-widget-copyright">
-              <a
-                href="https://www.tradingview.com/symbols/OANDA-XAUUSD/"
-                rel="noopener nofollow"
-                target="_blank"
-              >
-                <span class="blue-text">XAUUSD</span></a
-              ><span> by TradingView</span>
-            </div>
-            <script
-              type="text/javascript"
-              src="https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js"
-              async
-            >
-              {
-                "autosize": true,
-                "symbol": "OANDA:XAUUSD",
-                "interval": "D",
-                "timezone": "Etc/UTC",
-                "theme": "light",
-                "style": "3",
-                "locale": "id",
-                "hide_top_toolbar": true,
-                "hide_legend": true,
-                "save_image": false,
-                "isTransparent": true
-              }
-            </script>
-          </div>
+          <canvas id="goldChart" height="220" aria-label="Grafik harga penutupan emas {{ hasil.chart.ticker }}"></canvas>
         </div>
+        <p style="font-size:.78rem;color:#999;margin-top:6px;">
+          Data: Yahoo Finance ({{ hasil.chart.ticker }}) — instrumen dan sumber data yang sama persis
+          dengan yang dipakai model untuk memprediksi arah harga di atas.
+        </p>
+        <script id="chart-data" type="application/json">
+          {{ hasil.chart | tojson }}
+        </script>
         <div class="ohlc-grid">
           <div>
             <div class="label">Open</div>

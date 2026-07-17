@@ -56,7 +56,7 @@ PENJELASAN_INDIKATOR = {
             "Nilai positif besar berarti harga naik cepat; negatif besar berarti turun cepat.",
 }
 
-print(f"[STARTUP] Model dimuat. Fitur: {FEATURES} | Window N={N}")
+print(f"[STARTUP] Model dimuat. Fitur: {FEATURES} | Window N_long={N_LONG}, N_short={N_SHORT}")
 print(f"[STARTUP] Akurasi test (dari training): {metadata['test_metrics']['accuracy']:.4f}")
 
 
@@ -131,10 +131,6 @@ def get_prediction():
     if len(df_valid) == 0:
         raise ValueError("Data tidak cukup untuk menghitung indikator. Coba lagi nanti.")
 
-    today = pd.Timestamp(date.today())
-    df_valid = df_valid[df_valid["Date"] < today]   # buang candle yang mungkin masih live
-    latest_row = df_valid.iloc[[-1]]
-
     latest_row = df_valid.iloc[[-1]]
     X_latest = latest_row[FEATURES]
     X_latest_scaled = scaler.transform(X_latest)
@@ -156,6 +152,18 @@ def get_prediction():
         perubahan_persen = 0.0
 
     trading_sim = metadata.get("trading_simulation")  # None kalau metadata lama (belum ada simulasi)
+
+    # --- Data grafik harga: dari sumber & instrumen YANG SAMA dengan yang dipakai model (GC=F via yfinance) ---
+    # Sengaja TIDAK memakai widget TradingView (yang defaultnya menampilkan OANDA:XAUUSD, emas spot dari
+    # broker forex) -- itu instrumen berbeda dari GC=F (kontrak berjangka COMEX) yang jadi dasar prediksi
+    # model. Memakai data yang sama menghindari kebingungan "kok grafik naik tapi modelnya bilang turun".
+    CHART_LOOKBACK_HARI = 30
+    chart_df = df_valid[["Date", "Close"]].tail(CHART_LOOKBACK_HARI).reset_index(drop=True)
+    chart_data = {
+        "labels": chart_df["Date"].dt.strftime("%d %b").tolist(),
+        "harga": [round(float(v), 2) for v in chart_df["Close"].tolist()],
+        "ticker": TICKER,
+    }
 
     # Feature importance -- langsung dari model yang sudah di-pickle, TIDAK perlu retraining.
     mdi_raw = model.feature_importances_  # array sejajar dengan FEATURES, jumlahnya = 1.0
@@ -200,6 +208,7 @@ def get_prediction():
             "roc_auc": round(metadata["test_metrics"].get("roc_auc", 0), 4),
         },
         "trading_sim": trading_sim,
+        "chart": chart_data,
         "riwayat": riwayat,
         "akurasi_riwayat": akurasi_riwayat,
         "jumlah_riwayat_resolved": jumlah_riwayat_resolved,
