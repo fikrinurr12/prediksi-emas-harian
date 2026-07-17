@@ -181,19 +181,19 @@ def get_prediction():
     # Sengaja TIDAK memakai widget TradingView (yang defaultnya menampilkan OANDA:XAUUSD, emas spot dari
     # broker forex) -- itu instrumen berbeda dari GC=F (kontrak berjangka COMEX) yang jadi dasar prediksi
     # model. Memakai data yang sama menghindari kebingungan "kok grafik naik tapi modelnya bilang turun".
-    CHART_LOOKBACK_HARI = 30
-    chart_df = df_valid[["Date", "Close"]].tail(CHART_LOOKBACK_HARI).reset_index(drop=True)
+    # FIX v3: sebelumnya window dihitung dari "N baris data TRADING terakhir"
+    # (mis. 30 baris), lalu direntangkan ke kalender -- tapi kalau ada weekend/
+    # libur di dalam N baris itu, rentang kalendernya melar tidak terduga
+    # (30 baris trading bisa jadi 40+ hari kalender). Sekarang window dihitung
+    # LANGSUNG dari kalender: N hari kalender ke belakang dari tanggal data
+    # terakhir, baru diisi harga dari df_valid untuk tanggal yang ada datanya.
+    # Ini menjamin jumlah hari yang ditampilkan selalu persis N, bukan kira-kira.
+    CHART_LOOKBACK_HARI_KALENDER = 7
+    end_date = df_valid["Date"].max()
+    start_date = end_date - pd.Timedelta(days=CHART_LOOKBACK_HARI_KALENDER - 1)
 
-    # FIX: GC=F tidak trading di akhir pekan & libur bursa (mis. Juneteenth, Independence
-    # Day), jadi ada tanggal yang memang tidak punya data -- BUKAN data hilang/rusak.
-    # Sebelumnya sumbu-x cuma daftar tanggal yang ADA data, jadi jarak antar titik jadi
-    # tidak rata (kelihatan seperti "ada yang lompat"). Sekarang di-reindex ke KALENDER
-    # PENUH (7 hari/minggu, termasuk Sabtu-Minggu): hari yang bursa tutup jadi None di
-    # data ("harga"), sumbu-x tetap dapat slot & berjarak rata utk SETIAP hari, dan
-    # spanGaps di Chart.js (lihat script.js) menyambung garis melewati None itu dengan
-    # mulus alih-alih memutusnya.
-    full_days = pd.date_range(start=chart_df["Date"].min(), end=chart_df["Date"].max(), freq="D")
-    chart_series = chart_df.set_index("Date")["Close"].reindex(full_days)
+    full_days = pd.date_range(start=start_date, end=end_date, freq="D")
+    chart_series = df_valid.set_index("Date")["Close"].reindex(full_days)
 
     chart_data = {
         "labels": full_days.strftime("%d %b").tolist(),
