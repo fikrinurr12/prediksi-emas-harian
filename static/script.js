@@ -83,8 +83,32 @@ if (chartDataEl && window.Chart) {
   const chartData = JSON.parse(chartDataEl.textContent);
   const ctx = document.getElementById("goldChart");
   if (ctx && chartData.harga && chartData.harga.length) {
+    // Plugin kecil: gambar garis vertikal putus-putus di tanggal yang sedang
+    // di-hover, supaya jelas titik mana yang lagi ditunjuk kursor.
+    const verticalLineOnHover = {
+      id: "verticalLineOnHover",
+      afterDraw(chart) {
+        const active = chart.tooltip && chart.tooltip._active;
+        if (active && active.length) {
+          const x = active[0].element.x;
+          const { top, bottom } = chart.chartArea;
+          const c = chart.ctx;
+          c.save();
+          c.beginPath();
+          c.moveTo(x, top);
+          c.lineTo(x, bottom);
+          c.lineWidth = 1;
+          c.strokeStyle = "rgba(184,134,11,0.35)";
+          c.setLineDash([4, 4]);
+          c.stroke();
+          c.restore();
+        }
+      },
+    };
+
     new Chart(ctx, {
       type: "line",
+      plugins: [verticalLineOnHover],
       data: {
         labels: chartData.labels,
         datasets: [{
@@ -94,7 +118,9 @@ if (chartDataEl && window.Chart) {
           backgroundColor: "rgba(212,175,55,0.15)",
           borderWidth: 2,
           pointRadius: 0,
-          pointHoverRadius: 4,
+          pointHoverRadius: 5,
+          pointHitRadius: 12, // FIX: area sentuh titik diperbesar (titik aslinya
+                              // tak terlihat krn pointRadius:0), jadi lebih mudah kena.
           tension: 0.25,
           fill: true,
           spanGaps: true, // FIX: sumbu-x sekarang kalender hari kerja penuh --
@@ -105,6 +131,11 @@ if (chartDataEl && window.Chart) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        // FIX: mode "index" + intersect:false -- tooltip muncul begitu kursor
+        // ada DI MANA SAJA sepanjang garis vertikal tanggal itu, tidak perlu
+        // presisi tepat di atas titik data (yang tadinya kecil/tak terlihat).
+        interaction: { mode: "index", intersect: false },
+        hover: { mode: "index", intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {
