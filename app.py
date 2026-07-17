@@ -119,12 +119,36 @@ def fetch_latest_data(lookback_days=60):
     return df
 
 
+def get_latest_complete_row(df):
+    """
+    FIX (train/serve skew): GC=F (emas berjangka) berdagang hampir 24 jam/hari
+    lewat CME Globex. Selama sesi hari ini masih berjalan, baris "hari ini"
+    yang dikembalikan yfinance itu LIVE -- Open/High/Low/Close-nya terus
+    berubah tergantung jam berapa endpoint ini dipanggil. Model dilatih di
+    atas bar harian yang SUDAH FINAL (closing price akhir sesi), jadi kalau
+    baris live ini tetap dipakai untuk hitung indikator, prediksi bisa
+    berubah-ubah dalam hari yang sama cuma karena harga masih bergerak --
+    bukan karena ada sinyal baru yang valid.
+
+    Solusi: buang baris "hari ini" (Date >= hari ini) SEBELUM feature
+    engineering, supaya baris terakhir yang dipakai selalu bar yang sudah
+    settle, dan prediksi stabil sepanjang hari sampai bar berikutnya final.
+    """
+    if len(df) == 0:
+        return df
+    today = pd.Timestamp(date.today())
+    if df["Date"].iloc[-1] >= today:
+        df = df.iloc[:-1].reset_index(drop=True)
+    return df
+
+
 def get_prediction():
     """
     Alur lengkap: ambil data terbaru -> hitung indikator -> normalisasi -> prediksi.
     Mengembalikan dict berisi hasil prediksi & data pendukung untuk ditampilkan.
     """
     df = fetch_latest_data()
+    df = get_latest_complete_row(df)  # FIX: buang bar "hari ini" kalau masih live/belum final
     df = build_features(df, N_LONG, N_SHORT)
 
     df_valid = df.dropna(subset=FEATURES).reset_index(drop=True)
