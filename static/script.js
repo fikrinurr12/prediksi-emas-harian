@@ -20,7 +20,7 @@ if ("IntersectionObserver" in window && revealEls.length) {
         }
       });
     },
-    { threshold: 0.15 }
+    { threshold: 0.15 },
   );
   revealEls.forEach((el) => io.observe(el));
 } else {
@@ -30,13 +30,21 @@ if ("IntersectionObserver" in window && revealEls.length) {
 // Feature-importance bars: fill to their real width shortly after load (gives a subtle animated feel)
 const fiBars = document.querySelectorAll(".fi-bar-fill");
 if (fiBars.length) {
-  const fillBars = () => fiBars.forEach((b) => { b.style.width = b.dataset.pct + "%"; });
+  const fillBars = () =>
+    fiBars.forEach((b) => {
+      b.style.width = b.dataset.pct + "%";
+    });
   if ("IntersectionObserver" in window) {
     const fiPanel = document.querySelector(".fi-panel");
     if (fiPanel) {
       const fiObserver = new IntersectionObserver(
-        (entries) => { if (entries[0].isIntersecting) { fillBars(); fiObserver.disconnect(); } },
-        { threshold: 0.2 }
+        (entries) => {
+          if (entries[0].isIntersecting) {
+            fillBars();
+            fiObserver.disconnect();
+          }
+        },
+        { threshold: 0.2 },
       );
       fiObserver.observe(fiPanel);
     } else {
@@ -66,9 +74,15 @@ document.querySelectorAll(".ind-name").forEach((btn) => {
 function closeIndModal() {
   if (indOverlay) indOverlay.classList.remove("open");
 }
-document.getElementById("indModalClose")?.addEventListener("click", closeIndModal);
-indOverlay?.addEventListener("click", (e) => { if (e.target === indOverlay) closeIndModal(); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeIndModal(); });
+document
+  .getElementById("indModalClose")
+  ?.addEventListener("click", closeIndModal);
+indOverlay?.addEventListener("click", (e) => {
+  if (e.target === indOverlay) closeIndModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeIndModal();
+});
 
 // Grafik harga emas -- dirender dari data yfinance yang dikirim Flask (bukan widget eksternal),
 // supaya instrumen & sumber datanya identik dengan yang dipakai model untuk prediksi.
@@ -77,7 +91,9 @@ if (chartDataEl && !window.Chart) {
   // FIX: sebelumnya kegagalan ini diam-diam -- kalau Chart.js gagal ke-load
   // dgn alasan apapun (file hilang, dst), sekarang minimal ada jejak di
   // console supaya gampang didiagnosis lewat DevTools, bukan cuma "kosong".
-  console.error("[PrediksiEmas] Chart.js tidak ter-load -- grafik tidak bisa dirender. Cek static/vendor/chart.umd.js.");
+  console.error(
+    "[PrediksiEmas] Chart.js tidak ter-load -- grafik tidak bisa dirender. Cek static/vendor/chart.umd.js.",
+  );
 }
 if (chartDataEl && window.Chart) {
   const chartData = JSON.parse(chartDataEl.textContent);
@@ -87,20 +103,22 @@ if (chartDataEl && window.Chart) {
       type: "line",
       data: {
         labels: chartData.labels,
-        datasets: [{
-          label: `Harga Close (${chartData.ticker})`,
-          data: chartData.harga,
-          borderColor: "#B8860B",
-          backgroundColor: "rgba(212,175,55,0.15)",
-          borderWidth: 2,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          tension: 0.25,
-          fill: true,
-          spanGaps: true, // FIX: sumbu-x sekarang kalender hari kerja penuh --
-                           // hari libur bursa jadi null; spanGaps menyambung
-                           // garis melewatinya dgn mulus, bukan memutusnya.
-        }],
+        datasets: [
+          {
+            label: `Harga Close (${chartData.ticker})`,
+            data: chartData.harga,
+            borderColor: "#B8860B",
+            backgroundColor: "rgba(212,175,55,0.15)",
+            borderWidth: 2,
+            pointRadius: 0,
+            pointHoverRadius: 4,
+            tension: 0.25,
+            fill: true,
+            spanGaps: false, // FIX: sumbu-x sekarang kalender hari kerja penuh --
+            // hari libur bursa jadi null; spanGaps menyambung
+            // garis melewatinya dgn mulus, bukan memutusnya.
+          },
+        ],
       },
       options: {
         responsive: true,
@@ -109,7 +127,8 @@ if (chartDataEl && window.Chart) {
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: (item) => `$${item.parsed.y.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+              label: (item) =>
+                `$${item.parsed.y.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
             },
           },
         },
