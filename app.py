@@ -131,6 +131,10 @@ def get_prediction():
     if len(df_valid) == 0:
         raise ValueError("Data tidak cukup untuk menghitung indikator. Coba lagi nanti.")
 
+    today = pd.Timestamp(date.today())
+    df_valid = df_valid[df_valid["Date"] < today]   # buang candle yang mungkin masih live
+    latest_row = df_valid.iloc[[-1]]
+
     latest_row = df_valid.iloc[[-1]]
     X_latest = latest_row[FEATURES]
     X_latest_scaled = scaler.transform(X_latest)
