@@ -183,9 +183,20 @@ def get_prediction():
     # model. Memakai data yang sama menghindari kebingungan "kok grafik naik tapi modelnya bilang turun".
     CHART_LOOKBACK_HARI = 30
     chart_df = df_valid[["Date", "Close"]].tail(CHART_LOOKBACK_HARI).reset_index(drop=True)
+
+    # FIX: GC=F tidak trading di akhir pekan & libur bursa (mis. Juneteenth, Independence
+    # Day), jadi ada tanggal yang memang tidak punya data -- BUKAN data hilang/rusak.
+    # Sebelumnya sumbu-x cuma daftar tanggal yang ADA data, jadi jarak antar titik jadi
+    # tidak rata (kelihatan seperti "ada yang lompat"). Sekarang di-reindex ke kalender
+    # hari kerja penuh (Senin-Jumat): hari yang bursa tutup jadi None di data ("harga"),
+    # sumbu-x tetap berjarak rata per hari, dan spanGaps di Chart.js (lihat script.js)
+    # menyambung garis melewati None itu dengan mulus alih-alih memutusnya.
+    full_bdays = pd.bdate_range(start=chart_df["Date"].min(), end=chart_df["Date"].max())
+    chart_series = chart_df.set_index("Date")["Close"].reindex(full_bdays)
+
     chart_data = {
-        "labels": chart_df["Date"].dt.strftime("%d %b").tolist(),
-        "harga": [round(float(v), 2) for v in chart_df["Close"].tolist()],
+        "labels": full_bdays.strftime("%d %b").tolist(),
+        "harga": [None if pd.isna(v) else round(float(v), 2) for v in chart_series.tolist()],
         "ticker": TICKER,
     }
 
