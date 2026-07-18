@@ -216,8 +216,15 @@ def get_prediction():
     # LANGSUNG dari kalender: N hari kalender ke belakang dari tanggal data
     # terakhir, baru diisi harga dari df_valid untuk tanggal yang ada datanya.
     # Ini menjamin jumlah hari yang ditampilkan selalu persis N, bukan kira-kira.
+    # FIX v4: sebelumnya end_date dihitung dari TANGGAL DATA TERAKHIR YANG ADA
+    # (df_valid["Date"].max()) -- jadi kalau ini weekend/libur (belum ada bar
+    # baru), jendela grafik "macet" di hari bursa terakhir dan tidak ikut maju
+    # ke tanggal kalender hari ini. Sekarang end_date = tanggal HARI INI yang
+    # sebenarnya, supaya jendela selalu bergeser tiap hari; hari yang belum
+    # ada datanya (termasuk hari ini sendiri kalau belum ada bar) otomatis
+    # jadi None lewat reindex di bawah -- bukan disembunyikan/macet.
     CHART_LOOKBACK_HARI_KALENDER = 7
-    end_date = df_valid["Date"].max()
+    end_date = pd.Timestamp(date.today())
     start_date = end_date - pd.Timedelta(days=CHART_LOOKBACK_HARI_KALENDER - 1)
 
     full_days = pd.date_range(start=start_date, end=end_date, freq="D")

@@ -106,9 +106,35 @@ if (chartDataEl && window.Chart) {
       },
     };
 
+    // FIX: sebelumnya hari libur/weekend yang null di UJUNG rentang (bukan di
+    // tengah) tampil sebagai area kosong polos -- Chart.js memang tidak bisa
+    // menggambar garis ke titik yang tidak ada di ujung, jadi itu wilayah
+    // benar2 blank. Ini SEBENARNYA BENAR (bukan bug), tapi keliatannya
+    // seperti "data hilang". Plugin ini kasih shading abu2 tipis + label
+    // "Libur" di kolom itu, supaya jelas itu memang hari tanpa perdagangan.
+    const holidayShading = {
+      id: "holidayShading",
+      beforeDatasetsDraw(chart) {
+        const { ctx, chartArea, scales } = chart;
+        const data = chart.data.datasets[0].data;
+        const xScale = scales.x;
+        if (!chartArea) return;
+        ctx.save();
+        data.forEach((val, i) => {
+          if (val === null || val === undefined) {
+            const centerX = xScale.getPixelForValue(i);
+            const bandHalfWidth = xScale.width / data.length / 2;
+            ctx.fillStyle = "rgba(0,0,0,0.035)";
+            ctx.fillRect(centerX - bandHalfWidth, chartArea.top, bandHalfWidth * 2, chartArea.height);
+          }
+        });
+        ctx.restore();
+      },
+    };
+
     new Chart(ctx, {
       type: "line",
-      plugins: [verticalLineOnHover],
+      plugins: [verticalLineOnHover, holidayShading],
       data: {
         labels: chartData.labels,
         datasets: [{
