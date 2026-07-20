@@ -21,7 +21,6 @@ from flask import Flask, render_template, jsonify
 
 app = Flask(__name__)
 
-
 # ============================================================
 # 1. Muat model, scaler, dan metadata SEKALI saat aplikasi start
 # ============================================================
@@ -241,11 +240,7 @@ def get_prediction():
         key=lambda x: x["persen"], reverse=True,
     )
 
-    # --- Catat prediksi hari ini ke SQLite, dan resolusi prediksi lama yang tanggal targetnya sudah lewat ---
-    tanggal_dibuat = latest_row["Date"].dt.strftime("%Y-%m-%d").values[0]
-
     return {
-        "tanggal_data": tanggal_dibuat,
         "harga_close_terakhir": round(harga_usd_oz, 2),
         "harga_open": round(float(latest_row["Open"].values[0]), 2),
         "harga_high": round(float(latest_row["High"].values[0]), 2),
@@ -269,9 +264,6 @@ def get_prediction():
         },
         "trading_sim": trading_sim,
         "chart": chart_data,
-        "riwayat": riwayat,
-        "akurasi_riwayat": akurasi_riwayat,
-        "jumlah_riwayat_resolved": jumlah_riwayat_resolved,
     }
 
 
