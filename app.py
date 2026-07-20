@@ -224,7 +224,7 @@ def get_prediction():
     end_date = pd.Timestamp(date.today())
     start_date = end_date - pd.Timedelta(days=CHART_LOOKBACK_HARI_KALENDER - 1)
 
-    full_days = pd.date_range(start=start_date, end=end_date, freq="D")
+    full_days = pd.date_range(start=start_date, end=end_date, freq="H")
     chart_series = df_valid.set_index("Date")["Close"].reindex(full_days)
 
     chart_data = {
