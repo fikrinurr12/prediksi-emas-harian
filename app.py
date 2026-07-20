@@ -19,10 +19,7 @@ import yfinance as yf
 from datetime import date, timedelta
 from flask import Flask, render_template, jsonify
 
-import db
-
 app = Flask(__name__)
-db.init_db()
 
 # ============================================================
 # 1. Muat model, scaler, dan metadata SEKALI saat aplikasi start
@@ -242,50 +239,6 @@ def get_prediction():
         [{"nama": feat, "persen": round(float(val) * 100, 1)} for feat, val in zip(FEATURES, mdi_raw)],
         key=lambda x: x["persen"], reverse=True,
     )
-
-    # --- Catat prediksi hari ini ke SQLite, dan resolusi prediksi lama yang tanggal targetnya sudah lewat ---
-    tanggal_dibuat = latest_row["Date"].dt.strftime("%Y-%m-%d").values[0]
-    try:
-        db.catat_dan_resolusi_prediksi(
-            tanggal_dibuat=tanggal_dibuat,
-            harga_close_saat_prediksi=harga_usd_oz,
-            prediksi_arah="NAIK" if pred == 1 else "TURUN",
-            probabilitas=float(proba[pred]) * 100,
-            df_riwayat_harga=df_valid[["Date", "Close"]],
-        )
-    except Exception as e:
-        print(f"[WARN] Gagal mencatat riwayat prediksi ke SQLite: {e}")
-    riwayat, akurasi_riwayat, jumlah_riwayat_resolved = db.ambil_riwayat(limit=14)
-
-    return {
-        "tanggal_data": tanggal_dibuat,
-        "harga_close_terakhir": round(harga_usd_oz, 2),
-        "harga_open": round(float(latest_row["Open"].values[0]), 2),
-        "harga_high": round(float(latest_row["High"].values[0]), 2),
-        "harga_low": round(float(latest_row["Low"].values[0]), 2),
-        "harga_idr_gram_estimasi": round(harga_idr_gram_estimasi, 0),
-        "kurs_usd_idr": round(KURS_USD_IDR, 0),
-        "kurs_live": kurs_live,
-        "perubahan_persen": round(perubahan_persen, 2),
-        "prediksi": "NAIK" if pred == 1 else "TURUN",
-        "prediksi_kode": pred,
-        "probabilitas_naik": round(float(proba[1]) * 100, 2),
-        "probabilitas_turun": round(float(proba[0]) * 100, 2),
-        "indikator": {feat: round(float(latest_row[feat].values[0]), 4) for feat in FEATURES},
-        "feature_importance": feature_importance,
-        "penjelasan_indikator": PENJELASAN_INDIKATOR,
-        "model_info": {
-            "akurasi_test": round(metadata["test_metrics"]["accuracy"] * 100, 2),
-            "f1_score_test": round(metadata["test_metrics"]["f1_score"] * 100, 2),
-            "baseline_akurasi": round(metadata["baseline_accuracy"] * 100, 2),
-            "roc_auc": round(metadata["test_metrics"].get("roc_auc", 0), 4),
-        },
-        "trading_sim": trading_sim,
-        "chart": chart_data,
-        "riwayat": riwayat,
-        "akurasi_riwayat": akurasi_riwayat,
-        "jumlah_riwayat_resolved": jumlah_riwayat_resolved,
-    }
 
 
 # ============================================================
