@@ -8,6 +8,14 @@ PENTING: Fungsi build_features() di bawah ini HARUS SAMA PERSIS dengan
 fungsi feature engineering yang dipakai saat training model (notebook FINAL).
 Kalau salah satu diubah, yang lain WAJIB ikut diubah -- kalau tidak,
 prediksi di produksi tidak akan konsisten dengan hasil training (train/serve skew).
+
+Catatan revisi:
+- Penyimpanan riwayat prediksi via SQLite (db.py) DIHAPUS. Fitur itu sebelumnya
+  aktif di backend tapi tidak pernah disebut di Bab III/IV skripsi maupun
+  ditampilkan di halaman web -- jadi lebih konsisten dihapus daripada dibiarkan
+  jadi kode "mati" yang tidak sesuai naskah.
+- Jendela grafik 7-hari sekarang berlabuh pada tanggal DATA TERAKHIR yang benar-benar
+  tersedia (bukan tanggal kalender hari ini) -- lihat komentar FIX v5 di get_prediction().
 """
 
 import os
@@ -37,10 +45,9 @@ N_LONG = metadata["indicator_window_N_long"]
 N_SHORT = metadata["indicator_window_N_short"]
 TICKER = "GC=F"
 
-# Penjelasan ringkas tiap indikator -- dipakai untuk popup "klik nama indikator" di landing page.
 PENJELASAN_INDIKATOR = {
-    "SMA": "Simple Moving Average -- rata-rata harga selama 14 hari terakhir. Kalau harga sekarang "
-           "jauh di atas rata-rata ini, itu tanda tren sedang menguat.",
+    "SMA": "Simple Moving Average -- rata-rata harga selama 20 hari terakhir (tren jangka panjang). "
+           "Kalau harga sekarang jauh di atas rata-rata ini, itu tanda tren sedang menguat.",
     "EMA": "Exponential Moving Average -- mirip SMA, tapi memberi bobot lebih besar ke harga "
            "terbaru, sehingga lebih cepat bereaksi terhadap perubahan tren dibanding SMA.",
     "RSI": "Relative Strength Index -- mengukur seberapa kuat kenaikan dibanding penurunan harga "
@@ -61,21 +68,13 @@ print(f"[STARTUP] Akurasi test (dari training): {metadata['test_metrics']['accur
 # 2. Feature Engineering -- HARUS IDENTIK dengan notebook training
 # ============================================================
 def build_features(df, n_long=20, n_short=14):
-    """
-    Menghitung 5 indikator teknikal (Tabel 3.2 skripsi, revisi window ganda):
-    SMA & EMA pakai jendela n_long (tren jangka panjang),
-    RSI, STI, PROC pakai jendela n_short (momentum jangka pendek).
-    Formula ini identik dengan yang dipakai di notebook FINAL training.
-    """
     df = df.copy()
 
-    # SMA & EMA -- jendela panjang (tren)
     sma_raw = df["Close"].rolling(window=n_long).mean()
     ema_raw = df["Close"].ewm(span=n_long, adjust=False).mean()
     df["SMA"] = df["Close"] / sma_raw - 1
     df["EMA"] = df["Close"] / ema_raw - 1
 
-    # RSI -- jendela pendek (rumus baku)
     delta = df["Close"].diff()
     gain = delta.clip(lower=0)
     loss = -delta.clip(upper=0)
@@ -83,28 +82,18 @@ def build_features(df, n_long=20, n_short=14):
     avg_loss = loss.rolling(window=n_short).mean()
     rs = avg_gain / avg_loss.replace(0, np.nan)
     df["RSI"] = 100 - (100 / (1 + rs))
-    df["RSI"] = df["RSI"].fillna(100)  # FIX: avg_loss=0 -> RSI=100, bukan NaN
+    df["RSI"] = df["RSI"].fillna(100)
 
-    # STI -- jendela pendek
     lowest_low = df["Low"].rolling(window=n_short).min()
     highest_high = df["High"].rolling(window=n_short).max()
     df["STI"] = (df["Close"] - lowest_low) / (highest_high - lowest_low) * 100
 
-    # PROC -- jendela pendek
     df["PROC"] = (df["Close"] - df["Close"].shift(n_short)) / df["Close"].shift(n_short)
 
     return df
 
 
 def fetch_usd_idr_rate(fallback=18050):
-    """
-    Ambil kurs USD/IDR terkini dari Yahoo Finance (ticker USDIDR=X).
-    Kalau fetch gagal (jaringan, ticker down, dsb), pakai `fallback` supaya
-    kegagalan ambil kurs TIDAK pernah membuat seluruh halaman prediksi error --
-    ini cuma angka tampilan, bukan bagian dari model, jadi wajar didegradasi
-    dengan lembut (graceful fallback) alih-alih ikut melempar exception.
-    Return: (rate: float, is_live: bool)
-    """
     try:
         raw = yf.download("USDIDR=X", period="5d", interval="1d", progress=False)
         if isinstance(raw.columns, pd.MultiIndex):
@@ -122,11 +111,6 @@ def fetch_usd_idr_rate(fallback=18050):
 
 
 def fetch_latest_data(lookback_days=60):
-    """
-    Ambil data emas terbaru dari Yahoo Finance.
-    lookback_days perlu cukup panjang supaya rolling window (N=14) punya
-    data yang cukup untuk dihitung pada baris paling akhir.
-    """
     end_date = date.today().isoformat()
     start_date = (date.today() - timedelta(days=lookback_days)).isoformat()
 
@@ -142,20 +126,6 @@ def fetch_latest_data(lookback_days=60):
 
 
 def get_latest_complete_row(df):
-    """
-    FIX (train/serve skew): GC=F (emas berjangka) berdagang hampir 24 jam/hari
-    lewat CME Globex. Selama sesi hari ini masih berjalan, baris "hari ini"
-    yang dikembalikan yfinance itu LIVE -- Open/High/Low/Close-nya terus
-    berubah tergantung jam berapa endpoint ini dipanggil. Model dilatih di
-    atas bar harian yang SUDAH FINAL (closing price akhir sesi), jadi kalau
-    baris live ini tetap dipakai untuk hitung indikator, prediksi bisa
-    berubah-ubah dalam hari yang sama cuma karena harga masih bergerak --
-    bukan karena ada sinyal baru yang valid.
-
-    Solusi: buang baris "hari ini" (Date >= hari ini) SEBELUM feature
-    engineering, supaya baris terakhir yang dipakai selalu bar yang sudah
-    settle, dan prediksi stabil sepanjang hari sampai bar berikutnya final.
-    """
     if len(df) == 0:
         return df
     today = pd.Timestamp(date.today())
@@ -165,12 +135,8 @@ def get_latest_complete_row(df):
 
 
 def get_prediction():
-    """
-    Alur lengkap: ambil data terbaru -> hitung indikator -> normalisasi -> prediksi.
-    Mengembalikan dict berisi hasil prediksi & data pendukung untuk ditampilkan.
-    """
     df = fetch_latest_data()
-    df = get_latest_complete_row(df)  # FIX: buang bar "hari ini" kalau masih live/belum final
+    df = get_latest_complete_row(df)
     df = build_features(df, N_LONG, N_SHORT)
 
     df_valid = df.dropna(subset=FEATURES).reset_index(drop=True)
@@ -184,10 +150,6 @@ def get_prediction():
     pred = int(model.predict(X_latest_scaled)[0])
     proba = model.predict_proba(X_latest_scaled)[0]
 
-    # kurs acuan HANYA untuk tampilan (konversi USD/oz -> perkiraan Rp/gram), bukan fitur model.
-    # FIX: sebelumnya angka tetap (18050) yang ditulis manual di kode -- sekarang diambil live
-    # dari Yahoo Finance (USDIDR=X), dengan fallback ke angka tetap kalau fetch-nya gagal supaya
-    # kegagalan ambil kurs tidak pernah menjatuhkan seluruh halaman prediksi.
     KURS_USD_IDR, kurs_live = fetch_usd_idr_rate(fallback=18050)
     GRAM_PER_OZ = 31.1035
     harga_usd_oz = float(latest_row["Close"].values[0])
@@ -200,28 +162,26 @@ def get_prediction():
     else:
         perubahan_persen = 0.0
 
-    trading_sim = metadata.get("trading_simulation")  # None kalau metadata lama (belum ada simulasi)
+    trading_sim = metadata.get("trading_simulation")
 
-    # --- Data grafik harga: dari sumber & instrumen YANG SAMA dengan yang dipakai model (GC=F via yfinance) ---
-    # Sengaja TIDAK memakai widget TradingView (yang defaultnya menampilkan OANDA:XAUUSD, emas spot dari
-    # broker forex) -- itu instrumen berbeda dari GC=F (kontrak berjangka COMEX) yang jadi dasar prediksi
-    # model. Memakai data yang sama menghindari kebingungan "kok grafik naik tapi modelnya bilang turun".
-    # FIX v3: sebelumnya window dihitung dari "N baris data TRADING terakhir"
-    # (mis. 30 baris), lalu direntangkan ke kalender -- tapi kalau ada weekend/
-    # libur di dalam N baris itu, rentang kalendernya melar tidak terduga
-    # (30 baris trading bisa jadi 40+ hari kalender). Sekarang window dihitung
-    # LANGSUNG dari kalender: N hari kalender ke belakang dari tanggal data
-    # terakhir, baru diisi harga dari df_valid untuk tanggal yang ada datanya.
-    # Ini menjamin jumlah hari yang ditampilkan selalu persis N, bukan kira-kira.
-    # FIX v4: sebelumnya end_date dihitung dari TANGGAL DATA TERAKHIR YANG ADA
-    # (df_valid["Date"].max()) -- jadi kalau ini weekend/libur (belum ada bar
-    # baru), jendela grafik "macet" di hari bursa terakhir dan tidak ikut maju
-    # ke tanggal kalender hari ini. Sekarang end_date = tanggal HARI INI yang
-    # sebenarnya, supaya jendela selalu bergeser tiap hari; hari yang belum
-    # ada datanya (termasuk hari ini sendiri kalau belum ada bar) otomatis
-    # jadi None lewat reindex di bawah -- bukan disembunyikan/macet.
+    # FIX v5 (bug "3 hari terakhir kosong / tidak auto-update ke hari ini"): sebelumnya window
+    # kalender dihitung mundur dari `date.today()` (tanggal kalender SERVER), padahal df_valid
+    # sudah membuang bar "hari ini" (get_latest_complete_row) DAN Yahoo Finance kadang baru
+    # mempublikasikan bar harian GC=F beberapa jam setelah sesi tutup. Akibatnya, kalau window
+    # dihitung dari tanggal kalender hari ini, 1-3 hari TERAKHIR di jendela bisa kosong bukan
+    # karena weekend/libur (itu wajar, sudah diberi shading abu-abu oleh holidayShading di
+    # script.js), melainkan karena data hari itu memang belum terbit dari Yahoo saat endpoint
+    # ini dipanggil -- terlihat seperti "macet"/"tidak auto-update" padahal sumbernya sendiri
+    # belum terbit.
+    #
+    # Perbaikan: jendela grafik sekarang berlabuh pada TANGGAL DATA TERAKHIR yang benar-benar ada
+    # di df_valid (bukan tanggal kalender hari ini). Begitu Yahoo menerbitkan bar baru, endpoint
+    # ini otomatis ikut maju (karena df_valid berubah tiap fetch), sehingga grafik selalu
+    # menampilkan 7 hari kalender terakhir yang datanya sudah pasti tersedia -- tidak ada lagi
+    # hari kosong di ujung kanan akibat lag publikasi data. Weekend/libur di TENGAH jendela tetap
+    # tampil apa adanya (itu bukan bug, itu memang hari tanpa perdagangan).
     CHART_LOOKBACK_HARI_KALENDER = 7
-    end_date = pd.Timestamp(date.today())
+    end_date = df_valid["Date"].max()
     start_date = end_date - pd.Timedelta(days=CHART_LOOKBACK_HARI_KALENDER - 1)
 
     full_days = pd.date_range(start=start_date, end=end_date, freq="D")
@@ -231,16 +191,19 @@ def get_prediction():
         "labels": full_days.strftime("%d %b").tolist(),
         "harga": [None if pd.isna(v) else round(float(v), 2) for v in chart_series.tolist()],
         "ticker": TICKER,
+        "data_per": end_date.strftime("%d %b %Y"),
     }
 
-    # Feature importance -- langsung dari model yang sudah di-pickle, TIDAK perlu retraining.
-    mdi_raw = model.feature_importances_  # array sejajar dengan FEATURES, jumlahnya = 1.0
+    mdi_raw = model.feature_importances_
     feature_importance = sorted(
         [{"nama": feat, "persen": round(float(val) * 100, 1)} for feat, val in zip(FEATURES, mdi_raw)],
         key=lambda x: x["persen"], reverse=True,
     )
 
+    tanggal_dibuat = latest_row["Date"].dt.strftime("%Y-%m-%d").values[0]
+
     return {
+        "tanggal_data": tanggal_dibuat,
         "harga_close_terakhir": round(harga_usd_oz, 2),
         "harga_open": round(float(latest_row["Open"].values[0]), 2),
         "harga_high": round(float(latest_row["High"].values[0]), 2),
@@ -272,7 +235,6 @@ def get_prediction():
 # ============================================================
 @app.route("/")
 def index():
-    """Halaman utama - menampilkan prediksi hari ini dalam bentuk web sederhana."""
     try:
         hasil = get_prediction()
         return render_template("index.html", hasil=hasil, error=None)
@@ -282,7 +244,6 @@ def index():
 
 @app.route("/api/predict")
 def api_predict():
-    """Endpoint JSON - untuk dipakai programatik (mis. dipanggil dari aplikasi lain)."""
     try:
         hasil = get_prediction()
         return jsonify({"status": "success", "data": hasil})
@@ -292,7 +253,6 @@ def api_predict():
 
 @app.route("/health")
 def health():
-    """Health check endpoint - dipakai Railway untuk memastikan aplikasi hidup."""
     return jsonify({"status": "ok", "model_loaded": model is not None})
 
 

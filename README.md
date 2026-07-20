@@ -2,37 +2,17 @@
 
 Aplikasi web untuk menyajikan prediksi arah pergerakan harga emas harian dari model Random Forest + 5 indikator teknikal (SMA, EMA, RSI, STI, PROC), sesuai skripsi "Prediksi Arah Pergerakan Harga Emas Harian Menggunakan Algoritma Random Forest dan Indikator Teknikal".
 
-## Yang berubah di v3
+## Yang berubah di revisi ini
 
-- **Grafik realtime disederhanakan**: widget TradingView diganti dari "Advanced Chart" (banyak tombol, ada volume bar) ke "Mini Chart" -- tampilan garis tren polos, lebih mudah dibaca sekilas oleh orang awam.
-- **Panel "Pengaruh Indikator"** menggantikan ikon robot di section Model -- bar chart persentase kontribusi tiap indikator, dihitung langsung dari `model.feature_importances_` model yang sedang aktif (tidak perlu retraining setiap kali ingin menampilkan ini).
-- **Klik nama indikator** untuk popup penjelasan singkat fungsi indikator tersebut.
-- **Riwayat Prediksi (SQLite)** -- section baru di landing page yang menampilkan histori prediksi vs hasil aktual, dicatat otomatis setiap kali halaman/​API diakses. Lihat catatan penting di bawah soal Railway.
-- Hero section dipadatkan (padding dikurangi) supaya CTA dan kartu prediksi tidak terpotong di layar desktop standar.
-
-## ⚠️ Riwayat Prediksi (SQLite) dan Railway -- WAJIB DIBACA
-
-Riwayat prediksi disimpan di file SQLite lokal (`riwayat_prediksi.db`) lewat modul `db.py`.
-**Railway TIDAK menyimpan filesystem secara permanen secara default** -- setiap kali Anda redeploy
-atau aplikasi restart, file `.db` ini akan **hilang total** kalau tidak dipasang **Railway Volume**.
-
-Cara memasang Volume di Railway:
-1. Buka project Anda di Railway, klik service Flask ini.
-2. Tab **Settings > Volumes**, klik **New Volume**.
-3. Set mount path, misalnya `/data`.
-4. Tambahkan environment variable `DB_PATH=/data/riwayat_prediksi.db` di tab **Variables**.
-5. Redeploy. Sekarang riwayat prediksi akan tetap ada walau aplikasi di-restart/redeploy.
-
-Kalau langkah ini dilewati, aplikasi tetap berjalan normal (riwayat cuma akan mulai dari nol lagi
-setiap kali ada redeploy) -- tidak fatal, tapi riwayat jangka panjang tidak akan tersimpan.
+- **Riwayat Prediksi (SQLite) dihapus.** Fitur ini sebelumnya berjalan di backend (`db.py`) tapi tidak pernah disebut di Bab III/IV skripsi maupun ditampilkan di halaman web -- jadi ada kode yang "hidup" tapi tidak sesuai naskah. Dihapus supaya kode yang dilampirkan benar-benar mencerminkan apa yang ditulis di skripsi. Konsekuensinya: tidak perlu lagi memasang Railway Volume atau environment variable `DB_PATH`.
+- **Bug grafik "3 hari terakhir kosong / tidak auto-update"** diperbaiki. Sebelumnya jendela 7-hari grafik dihitung mundur dari tanggal kalender *hari ini* di server, padahal bar "hari ini" memang sengaja dibuang (supaya tidak memakai data GC=F yang masih live/belum settle) dan Yahoo Finance kadang baru menerbitkan bar harian beberapa jam setelah sesi tutup -- sehingga 1-3 hari terakhir bisa tampak kosong padahal itu bukan hari libur. Sekarang jendela grafik berlabuh pada **tanggal data terakhir yang benar-benar tersedia** (bukan tanggal kalender hari ini), jadi otomatis mengikuti begitu Yahoo menerbitkan bar baru. Hari libur bursa yang sungguhan (weekend, dsb.) tetap tampil sebagai bayangan abu-abu di grafik -- itu bukan bug.
+- **Responsivitas mobile diperbaiki.** Root cause "tembus layar" sebelumnya: beberapa CSS Grid (`.hero`, `.ohlc-grid`, `.stat-grid`, dst.) tidak memakai `minmax(0, ...)` pada kolomnya, sehingga elemen dengan teks/angka lebar (mis. `$4,155.10`) bisa memaksa grid track melebar melebihi kontainer dan mendorong layar horizontal-scroll di HP. Perbaikan: seluruh grid utama sekarang pakai `minmax(0,1fr)`, ditambah breakpoint baru `max-width:480px` yang mengecilkan padding/font dan mengubah `.ohlc-grid` dari 4 kolom jadi 2 kolom di layar sempit. Grafik sekarang diberi ukuran lewat `aspect-ratio` CSS (bukan atribut `height` tetap di tag `<canvas>`), dan `overflow-x:hidden` dipasang di `html`/`body` sebagai lapisan pengaman terakhir.
 
 ## Struktur Folder
 
 ```
 flask_project/
-├── app.py                   # Aplikasi Flask utama
-├── db.py                    # Modul SQLite untuk riwayat prediksi
-├── riwayat_prediksi.db       # Dibuat otomatis saat pertama kali run (jangan commit ke git)
+├── app.py                   # Aplikasi Flask utama (tanpa SQLite)
 ├── requirements.txt         # Daftar dependency Python
 ├── Procfile                 # Perintah start untuk Railway
 ├── railway.json             # Konfigurasi tambahan Railway
@@ -41,20 +21,18 @@ flask_project/
 │   ├── scaler_emas.pkl      # MinMaxScaler terlatih
 │   └── model_metadata.json  # Info fitur, hyperparameter, metrik, hasil simulasi trading
 ├── templates/
-│   └── index.html           # Halaman web (navbar, hero, model+feature importance, tentang, riwayat, footer)
+│   └── index.html           # Halaman web (navbar, hero, model+feature importance, tentang, footer)
 └── static/
-    ├── style.css             # Styling (palet putih/hitam/emas #D4AF37)
-    └── script.js             # Navbar on-scroll, fade-up, bar animasi, popup indikator
+    ├── style.css             # Styling (palet putih/hitam/emas #D4AF37), sudah responsif
+    └── script.js             # Navbar on-scroll, fade-up, bar animasi, popup indikator, grafik
 ```
 
 ## ⚠️ SEBELUM DEPLOY — Langkah Wajib
 
-**Folder `model/` di sini SUDAH DIISI dengan model hasil training Anda sendiri** (dari `hasil_training_emas.zip` yang Anda jalankan di Colab, akurasi 50,20% / ROC-AUC 0,4975 -- lihat Bagian 0 dokumen revisi PDF). `requirements.txt` juga sudah disamakan ke `scikit-learn==1.6.1` sesuai versi di `model_metadata.json`.
-
-**Kalau Anda retrain lagi nanti** (dapat model baru dari Colab), ulangi langkah ini:
+Kalau Anda melatih ulang model dari notebook (`prediksi_emas_v3.ipynb`), ulangi langkah ini:
 
 1. Jalankan notebook sampai selesai (bagian "Simpan Model, Scaler, Metadata").
-2. Download `hasil_training_emas.zip` yang otomatis ter-download -- di dalamnya ada folder `model/` (3 file) dan `figures/` (16 gambar untuk Bab III/IV).
+2. Download `hasil_training_emas.zip` yang otomatis ter-download -- di dalamnya ada folder `model/` (3 file) dan `figures/` (untuk Bab III/IV).
 3. **Timpa** 3 file di folder `model/` proyek Flask ini dengan yang baru.
 4. **Cek versi scikit-learn** yang tercetak di sel pertama notebook Colab (contoh: `scikit-learn version: 1.6.1`).
 5. **Buka `requirements.txt`**, ubah baris `scikit-learn==...` supaya **sama persis** dengan versi di poin 4.
@@ -103,12 +81,12 @@ railway domain   # untuk generate URL publik
 | `GET /api/predict` | Endpoint JSON — prediksi dalam format API |
 | `GET /health` | Health check (dipakai Railway untuk memastikan aplikasi hidup) |
 
-Contoh respons `/api/predict` (angka riil dari model yang sedang aktif per 11 Juli 2026):
+Contoh bentuk respons `/api/predict` (nilai contoh, akan berbeda sesuai model yang aktif):
 ```json
 {
   "status": "success",
   "data": {
-    "tanggal_data": "2026-07-11",
+    "tanggal_data": "2026-07-20",
     "harga_close_terakhir": 4104.10,
     "harga_open": 4122.30,
     "harga_high": 4125.80,
@@ -123,21 +101,13 @@ Contoh respons `/api/predict` (angka riil dari model yang sedang aktif per 11 Ju
       { "nama": "SMA", "persen": 23.1 }, { "nama": "EMA", "persen": 22.7 },
       { "nama": "RSI", "persen": 18.6 }, { "nama": "STI", "persen": 18.1 }, { "nama": "PROC", "persen": 17.5 }
     ],
-    "model_info": { "akurasi_test": 50.20, "f1_score_test": 61.49, "baseline_akurasi": 56.22, "roc_auc": 0.4975 },
-    "trading_sim": { "return_strategi_persen": 8.38, "return_buyhold_persen": -4.87, "...": "lihat model_metadata.json untuk field lengkap" },
-    "riwayat": [ { "tanggal_dibuat": "2026-07-10", "prediksi_arah": "TURUN", "benar": 0, "...": "lihat db.py" } ],
-    "akurasi_riwayat": 0.0,
-    "jumlah_riwayat_resolved": 1
+    "model_info": { "akurasi_test": 52.82, "f1_score_test": 58.36, "baseline_akurasi": 56.05, "roc_auc": 0.5127 },
+    "trading_sim": { "return_strategi_persen": 9.03, "return_buyhold_persen": -4.87, "...": "lihat model_metadata.json untuk field lengkap" },
+    "chart": { "labels": ["...": "7 hari kalender terakhir yang datanya tersedia"], "data_per": "20 Jul 2026" }
   }
 }
 ```
-Catatan: `akurasi_test` sengaja ditampilkan **berdampingan** dengan `baseline_akurasi`, bukan sendirian --
-supaya siapa pun yang memakai API ini langsung tahu apakah model benar-benar lebih baik dari tebakan
-mayoritas atau tidak (saat ini TIDAK -- 50,20% vs 56,22%). `akurasi_riwayat` berbeda dari `akurasi_test`:
-`akurasi_test` adalah akurasi historis di data uji (bulan Juni-Juli 2026 ke belakang), sedangkan
-`akurasi_riwayat` adalah akurasi LIVE yang baru mulai terkumpul sejak fitur SQLite ini aktif --
-jangan disamakan, dan jangan simpulkan apa pun dari `akurasi_riwayat` sebelum datanya cukup banyak
-(idealnya puluhan hari, bukan segelintir hari pertama).
+Catatan: `akurasi_test` sengaja ditampilkan **berdampingan** dengan `baseline_akurasi`, bukan sendirian -- supaya siapa pun yang memakai API ini langsung tahu apakah model benar-benar lebih baik dari tebakan mayoritas atau tidak.
 
 ## Catatan Penting Soal Konsistensi (Train/Serve Skew)
 
@@ -145,4 +115,4 @@ Fungsi `build_features()` di `app.py` **harus identik** dengan fungsi feature en
 
 ## Disclaimer
 
-Aplikasi ini adalah bagian dari penelitian skripsi. Berdasarkan pengujian metodologis yang menyeluruh (dijelaskan di Bab IV skripsi), performa model berada dalam kisaran yang sebanding dengan strategi baseline sederhana. **Ini bukan rekomendasi investasi** — nilai edukatif/akademis adalah tujuan utama aplikasi ini.
+Aplikasi ini adalah bagian dari penelitian skripsi. Berdasarkan pengujian metodologis yang menyeluruh (dijelaskan di Bab IV skripsi, termasuk walk-forward validation multi-jendela di notebook `v3`), performa model berada dalam kisaran yang sebanding dengan strategi baseline sederhana. **Ini bukan rekomendasi investasi** — nilai edukatif/akademis adalah tujuan utama aplikasi ini.

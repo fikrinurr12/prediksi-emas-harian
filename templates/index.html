@@ -134,11 +134,12 @@
       <div class="chart-card reveal">
         <h3>Grafik Harga Emas ({{ hasil.chart.ticker }}) · {{ hasil.chart.labels|length }} Hari Terakhir</h3>
         <div class="tv-widget-wrap">
-          <canvas id="goldChart" height="220" aria-label="Grafik harga penutupan emas {{ hasil.chart.ticker }}"></canvas>
+          <canvas id="goldChart" aria-label="Grafik harga penutupan emas {{ hasil.chart.ticker }}"></canvas>
         </div>
         <p style="font-size:.78rem;color:#999;margin-top:6px;">
-          Data: Yahoo Finance ({{ hasil.chart.ticker }}) — instrumen dan sumber data yang sama persis
-          dengan yang dipakai model untuk memprediksi arah harga di atas.
+          Data: Yahoo Finance ({{ hasil.chart.ticker }}) hingga {{ hasil.chart.data_per }} — instrumen
+          dan sumber data yang sama persis dengan yang dipakai model untuk memprediksi arah harga di atas.
+          Hari tanpa bar (akhir pekan/libur bursa) ditandai bayangan abu-abu.
         </p>
         <script id="chart-data" type="application/json">
           {{ hasil.chart | tojson }}
