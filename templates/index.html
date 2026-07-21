@@ -140,6 +140,9 @@
           Data: Yahoo Finance ({{ hasil.chart.ticker }}) hingga {{ hasil.chart.data_per }} — instrumen
           dan sumber data yang sama persis dengan yang dipakai model untuk memprediksi arah harga di atas.
           Hari tanpa bar (akhir pekan/libur bursa) ditandai bayangan abu-abu.
+          <br />Dicek server pada {{ hasil.chart.dicek_pada }}. Kalau tanggal data di atas tertinggal
+          lebih dari 2-3 hari kerja dari hari ini, itu keterlambatan publikasi data dari Yahoo Finance,
+          bukan cache di halaman ini (halaman ini fetch ulang setiap kali dibuka).
         </p>
         <script id="chart-data" type="application/json">
           {{ hasil.chart | tojson }}

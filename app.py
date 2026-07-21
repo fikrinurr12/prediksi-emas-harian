@@ -24,7 +24,7 @@ import joblib
 import numpy as np
 import pandas as pd
 import yfinance as yf
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from flask import Flask, render_template, jsonify
 
 app = Flask(__name__)
@@ -111,6 +111,28 @@ def fetch_usd_idr_rate(fallback=18050):
 
 
 def fetch_latest_data(lookback_days=60):
+    """
+    Ambil data emas terbaru dari Yahoo Finance.
+
+    CATATAN (bug "chart tidak update ke hari terbaru"): kalau chart selalu berhenti
+    di tanggal yang sama walau sudah beberapa hari berlalu, kemungkinan besar
+    PENYEBABNYA BUKAN di logika jendela grafik (app.py sudah berlabuh ke tanggal
+    data TERAKHIR yang tersedia, bukan tanggal kalender -- itu sudah benar), tapi
+    yf.download() itu sendiri yang menerima data usang dari Yahoo. Ini gejala umum
+    yfinance yang dideploy di host cloud (Railway/Render/Heroku, dsb): IP datacenter
+    sering kena rate-limit/served cache basi oleh Yahoo. Fungsi ini sekarang:
+      1. Mencetak rentang tanggal MENTAH yang diterima (sebelum diproses apa pun) ke
+         log, supaya bisa dicek lewat `railway logs` apakah masalahnya di Yahoo
+         (log akan menunjukkan tanggal lama) atau di kode ini (log menunjukkan
+         tanggal baru, tapi tampil di web tetap lama -> baru itu bug kode).
+      2. Kalau data yang diterima "terlalu usang" (lebih dari LAG_MAKSIMAL_HARI hari
+         kalender di belakang hari ini -- angka ini sengaja dilonggarkan untuk
+         akomodasi akhir pekan/libur bursa), dicoba SEKALI LAGI lewat jalur berbeda
+         (yf.Ticker(...).history(), bukan yf.download()) sebagai fallback, karena
+         keduanya kadang punya perilaku cache/rate-limit yang tidak identik.
+    """
+    LAG_MAKSIMAL_HARI = 4  # weekend biasa = 2 hari; beri jarak sedikit lebih longgar
+
     end_date = date.today().isoformat()
     start_date = (date.today() - timedelta(days=lookback_days)).isoformat()
 
@@ -122,6 +144,34 @@ def fetch_latest_data(lookback_days=60):
     df["Date"] = pd.to_datetime(df["Date"])
     df = df.sort_values("Date").reset_index(drop=True)
     df = df.dropna(subset=["Open", "High", "Low", "Close"]).drop_duplicates(subset=["Date"]).reset_index(drop=True)
+
+    tgl_terakhir = df["Date"].max() if len(df) else None
+    print(f"[FETCH] yf.download({TICKER}) -> {len(df)} baris, tanggal terakhir mentah: {tgl_terakhir}")
+
+    lag_hari = (pd.Timestamp(date.today()) - tgl_terakhir).days if tgl_terakhir is not None else 999
+    if lag_hari > LAG_MAKSIMAL_HARI:
+        print(f"[WARN] Data dari yf.download() tertinggal {lag_hari} hari -- kemungkinan Yahoo "
+              f"menyajikan respons usang/di-cache ke IP server ini. Mencoba fallback via "
+              f"yf.Ticker().history() ...")
+        try:
+            raw2 = yf.Ticker(TICKER).history(period=f"{lookback_days}d", interval="1d")
+            raw2 = raw2.reset_index()
+            raw2["Date"] = pd.to_datetime(raw2["Date"]).dt.tz_localize(None)
+            raw2 = raw2.sort_values("Date").reset_index(drop=True)
+            raw2 = raw2.dropna(subset=["Open", "High", "Low", "Close"]).drop_duplicates(subset=["Date"]).reset_index(drop=True)
+            tgl_terakhir2 = raw2["Date"].max() if len(raw2) else None
+            print(f"[FETCH-FALLBACK] yf.Ticker().history() -> {len(raw2)} baris, "
+                  f"tanggal terakhir: {tgl_terakhir2}")
+            if tgl_terakhir2 is not None and (tgl_terakhir is None or tgl_terakhir2 > tgl_terakhir):
+                df = raw2[["Date", "Open", "High", "Low", "Close", "Volume"]]
+                print("[FETCH-FALLBACK] Dipakai -- lebih baru dari hasil yf.download().")
+            else:
+                print("[FETCH-FALLBACK] Tidak lebih baru dari yf.download() -- tetap pakai data awal. "
+                      "Kalau ini terus terjadi berhari-hari, sumbernya di sisi Yahoo/jaringan Railway, "
+                      "bukan di kode. Coba redeploy/restart service, atau cek lagi beberapa jam kemudian.")
+        except Exception as e:
+            print(f"[FETCH-FALLBACK] Gagal: {e} -- tetap pakai hasil yf.download() di atas.")
+
     return df
 
 
@@ -192,6 +242,7 @@ def get_prediction():
         "harga": [None if pd.isna(v) else round(float(v), 2) for v in chart_series.tolist()],
         "ticker": TICKER,
         "data_per": end_date.strftime("%d %b %Y"),
+        "dicek_pada": datetime.now().strftime("%d %b %Y, %H:%M"),
     }
 
     mdi_raw = model.feature_importances_
