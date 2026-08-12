@@ -136,7 +136,7 @@ def fetch_latest_data(lookback_days=60):
     end_date = date.today().isoformat()
     start_date = (date.today() - timedelta(days=lookback_days)).isoformat()
 
-    raw = yfb.download(TICKER, start=start_date, end=end_date, interval="1d", progress=False)
+    raw = yf.download(TICKER, start=start_date, end=end_date, interval="1d", progress=False)
     if isinstance(raw.columns, pd.MultiIndex):
         raw.columns = raw.columns.get_level_values(0)
 
